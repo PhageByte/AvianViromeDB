@@ -1,0 +1,244 @@
+---
+title: "10-import"
+title-block-banner: true
+author:
+  - name: Jinlong Ru
+    orcid: 0000-0002-6757-6018
+date: 2025-04-04
+toc: true
+toc-depth: 4
+number-sections: true
+code-fold: true
+code-line-numbers: true
+code-tools: true
+format: 
+  html:
+    embed-resources: true
+    smooth-scroll: true
+    page-layout: full
+reference-location: section
+citation-location: document
+params:
+  name: "10-import"
+---
+
+The purpose of this document is to import the metadata and results from ViroProfiler and other tools to a SQLite database for further analysis.
+
+```{r setup}
+#| message: false
+#| include: false
+#| warning: false
+wd <- "analyses"
+if (basename(getwd()) != wd) {
+  setwd(here::here(wd))
+}
+params <- list(name = "10-import")
+here::i_am(paste0(params$name, ".qmd"), uuid = "17a61b94-8453-4573-b2fd-e19f8ef3738f")
+projthis::proj_create_dir_target(params$name, clean = FALSE)
+path_target <- projthis::proj_path_target(params$name)
+path_source <- projthis::proj_path_source(params$name)
+path_raw <- path_source("00-raw")
+path_resource <- here::here(path_raw, "d00-resource")
+path_data <- here::here(path_raw, paste0("d", params$name))
+dir.create(path_raw, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_data, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_resource, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r packages}
+#| message: false
+#| warning: false
+suppressPackageStartupMessages({
+  library(here)
+  library(conflicted)
+  library(tidyverse)
+  library(data.table)
+  devtools::load_all()
+})
+
+con <- qproj::proj_db_connect(create = TRUE)
+```
+
+## Tasks
+
+NOTE: 
+
+1. vOTU IDs are determined by the `map-aniclst.tsv` file.
+2. VC IDs are determined by the `vcontact3-final_assignments.csv` file.
+3. The `study_id` is the same as the `sample_id`, except for the samples from the iMeta2024 paper.
+
+Viral contigs should satisfy the following criteria:
+
+1. `genomad_virus_score` >= 0.8 & `virsorter2_score` >= 0.9
+
+Viral-host pairs should satisfy the following criteria:
+
+1. iPHoP `Confidence.score` >= 90
+
+
+```{r metadata}
+df_metadata <- openxlsx::read.xlsx(here(path_raw, "pc028e3-metadata.xlsx"), sheet = "metadata") %>% 
+  # dplyr::select(c("study_id", "project_id", "sample_host", "geo_loc_name", "sample_id")) %>%
+  dplyr::distinct()
+```
+
+```{r import hpc results}
+df_vibrant <- parse_vibrant_quality(here(path_data, "vibrant-genome_quality.tsv"))
+df_genomad <- parse_genomad_summary(here(path_data, "genomad-summary.tsv")) %>% 
+  dplyr::select(-c("realm", "kingdom", "phylum", "class", "order", "family", "genus", "species"))
+df_taxonomy <- fread(path_source("09-taxonomy", "taxonomy_formatted.tsv"))
+df_virsorter2 <- parse_virsorter2(here(path_data, "virsorter2-score.tsv"), here(path_data, "virsorter2-category.csv"))
+df_checkv <- parse_checkv_quality(here(path_data, "checkv-quality_summary.tsv"))
+df_ctg2vOTU <- parse_aniclst(here(path_data, "map-aniclst.tsv"))
+df_bacphlip <- parse_bacphlip(here(path_data, "bacphlip.tsv.gz"))
+df_vcontact3 <- parse_vcontact3(here(path_data, "vcontact3-final_assignments.csv.gz"))
+df_vcontact3_qry <- df_vcontact3 %>%
+  dplyr::filter(Reference == FALSE) %>%
+  dplyr::select(-c("Reference")) %>%
+  data.table::setnames("GenomeName", "contig_repid")
+
+
+# The df_ctg2asb table is variable between different projects, so we need to parse it separately
+df_ctg2asb <- fread(here(path_data, "map-contig2asb.tsv"), header = FALSE) %>% 
+  data.table::setnames(c("contig_id", "assembly_id")) %>% 
+  dplyr::mutate(sample_id = stringr::str_replace_all(assembly_id, "ma2024imeta__", "ma2024imeta_")) %>%
+  dplyr::mutate(sample_id = stringr::str_replace_all(sample_id, "__.*", "")) %>%
+  # some sample_id contains "_clean", remove it
+  dplyr::mutate(sample_id = stringr::str_replace_all(sample_id, "_clean", ""))
+```
+
+```{r merge all tables}
+df_metadata_host <- df_metadata %>% 
+  dplyr::select(c("study_id", "sample_host")) %>% 
+  dplyr::distinct()
+
+
+df_contig_annotation <- df_ctg2vOTU %>%
+  dplyr::left_join(df_ctg2asb, by = "contig_id") %>% 
+  dplyr::left_join(df_checkv, by = "contig_id") %>% 
+  dplyr::left_join(df_taxonomy, by = "contig_id") %>%
+  dplyr::inner_join(df_genomad, by = "contig_id") %>% 
+  dplyr::inner_join(df_virsorter2, by = "contig_id") %>%
+  dplyr::left_join(df_vibrant, by = "contig_id") %>%
+  dplyr::left_join(df_bacphlip, by = "contig_id") %>%
+  dplyr::left_join(df_vcontact3_qry, by = "contig_repid") %>%
+  # create new column "lifestyle", set value to "temperate" if "vibrant_type" is "lysogenic" or "genomad_topology" is "Provirus" or "checkv_provirus" is "Yes" or "bacphlip_lifestyle" is "temperate", otherwise set to "virulent"
+  dplyr::mutate(lifestyle = dplyr::case_when(
+    vibrant_type == "lysogenic" | genomad_topology == "Provirus" | checkv_provirus == "Yes" | bacphlip_lifestyle == "temperate" ~ "temperate",
+    TRUE ~ "virulent")) %>%
+  # sort by contig_id
+  dplyr::arrange(contig_id) %>%
+  # fill missing values in sample_id with previous non-NA value
+  tidyr::fill(sample_id, .direction = "down") %>%
+  dplyr::mutate(study_id = stringr::str_replace_all(sample_id, "_.*", "")) %>%
+  dplyr::mutate(assembly_id = ifelse(is.na(assembly_id), str_c(sample_id, "__missing"), assembly_id)) %>%
+  # put "contig_id" and "study_id" at the beginning of the data frame
+  dplyr::select(c("contig_id", "study_id", everything())) %>%
+  # only keep high confidence viral contigs
+  dplyr::filter(genomad_virus_score >= 0.8 & virsorter2_score >= 0.9) %>% 
+  # add bird host columns
+  dplyr::left_join(df_metadata_host, by = "study_id") %>% 
+  pivot_wider(names_from = sample_host, values_from = sample_host, values_fn = function(x) 1, values_fill = 0, names_prefix = "host_")
+  
+
+# Viral-host prediction by iPHoP
+df_host <- fread(here(path_data, "iphop-prediction_to_genome.csv.gz")) %>%
+  data.table::setnames(colnames(.), make.names(colnames(.))) %>%
+  data.table::setnames("Virus", "contig_id") %>%
+  dplyr::filter(Confidence.score >= 90) %>%
+  dplyr::filter(contig_id %in% df_contig_annotation$contig_id)
+
+# parse DRAM-v AMG results
+df_amg_dramv <- read_amg(here(path_data, "dramv-amg.tsv"), "dramv")
+df_amg_vibrant <- read_amg(here(path_data, "vibrant-amg.tsv"), "vibrant")
+```
+
+```{r empty assembly_id due to missing assembly results}
+df_asb_empty <- df_contig_annotation %>%
+  dplyr::filter(str_detect(assembly_id, "__missing"))
+
+# save df_asb_empty to csv
+fwrite(df_asb_empty, path_target("df_asb_empty.tsv"), sep = "\t")
+```
+
+```{r filter high-quality VCs for downstream analysis}
+# filter by the selected column
+df_contig_annotation_filtered <- df_contig_annotation %>% 
+  # dplyr::filter(checkv_quality_score %in% c(1,2,3,4)) %>% 
+  dplyr::filter(genomad_virus_score >= 0.9) %>% 
+  dplyr::filter(checkv_contamination <= 5) %>% 
+  dplyr::filter(virsorter2_score >= 0.9) %>% 
+  dplyr::filter(vibrant_quality_score %in% c(1,2,3,4)) %>% 
+  # sort by checkv_quality_score 
+  dplyr::arrange(desc(checkv_completeness)) %>% 
+  dplyr::filter(checkv_completeness >= 20)
+
+
+
+# Representative attributes and the exported ID come from the same member.
+# The original representative remains the provenance key for existing networks.
+df_vOTUrep_filtered <- build_votu_representatives(
+  df_contig_annotation_filtered, df_contig_annotation)
+
+
+mean(df_vOTUrep_filtered$checkv_completeness, na.rm = TRUE)
+
+df_amg_dramv_filtered <- dplyr::filter(df_amg_dramv, contig_id %in% df_contig_annotation_filtered$contig_id)
+df_amg_vibrant_filtered <- dplyr::filter(df_amg_vibrant, contig_id %in% df_contig_annotation_filtered$contig_id)
+df_host_filtered <- dplyr::filter(df_host, contig_id %in% df_contig_annotation_filtered$contig_id)
+df_vcontact_filtered <-  dplyr::filter(df_vcontact3, vc_id %in% df_contig_annotation_filtered$vc_id)
+df_metadata_filtered <-  dplyr::filter(df_metadata, study_id %in% df_contig_annotation_filtered$study_id)
+
+# write filtered data to sqlite
+DBI::dbWriteTable(con, "amg_dramv_filtered", df_amg_dramv_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "amg_vibrant_filtered", df_amg_vibrant_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "host_filtered", df_host_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "vcontact_filtered", df_vcontact_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "contig_annotation_filtered", df_contig_annotation_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "sample_metadata_filtered", df_metadata_filtered, overwrite = TRUE)
+DBI::dbWriteTable(con, "contig_annotation_filtered_vOTU", df_vOTUrep_filtered, overwrite = TRUE)
+```
+
+
+
+```{r protein annotation}
+df_eggnog <- fread(here(path_data, "anno_eggnog.tsv.gz")) %>% 
+  dplyr::mutate(contig_id = str_replace_all(query, "_.*", "")) %>% 
+  dplyr::rename(protein_id = query) %>%
+  dplyr::select(c(contig_id, everything()))
+
+df_dramv <- fread(here(path_data, "anno_dramv.tsv.gz")) %>% 
+  dplyr::mutate(contig_id = str_replace_all(scaffold, "-cat_.*", "")) %>% 
+  dplyr::mutate(protein_id = str_replace_all(V1, "-cat_.*_", "_")) %>%
+  dplyr::select(c(contig_id, protein_id, everything()))
+
+DBI::dbWriteTable(con, "anno_prot_eggnog", df_eggnog, overwrite = TRUE, row.names = FALSE)
+DBI::dbWriteTable(con, "anno_prot_dramv", df_dramv, overwrite = TRUE, row.names = FALSE)
+```
+
+```{r arg}
+df_arg <- fread(here(path_data, "anno_abricate.tsv.gz")) %>% 
+  dplyr::rename(protein_id = SEQUENCE) %>% 
+  dplyr::mutate(contig_id = str_replace_all(protein_id, "-.*", "")) %>% 
+  dplyr::select(c(contig_id, everything()))
+
+DBI::dbWriteTable(con, "anno_prot_ARG", df_arg, overwrite = TRUE, row.names = FALSE)
+```
+
+
+
+## Files written
+
+These files have been written to the target directory, `r paste0("data/", params$name)`:
+
+```{r list-files-target}
+DBI::dbWriteTable(con, "vcontact", df_vcontact3, overwrite = TRUE)
+DBI::dbWriteTable(con, "contig_annotation", df_contig_annotation, overwrite = TRUE)
+DBI::dbWriteTable(con, "host", df_host, overwrite = TRUE)
+DBI::dbWriteTable(con, "sample_metadata", df_metadata, overwrite = TRUE)
+DBI::dbWriteTable(con, "amg_dramv", df_amg_dramv, overwrite = TRUE)
+DBI::dbWriteTable(con, "amg_vibrant", df_amg_vibrant, overwrite = TRUE)
+# DBI::dbExecute(con, "VACUUM")
+DBI::dbDisconnect(con)
+projthis::proj_dir_info(path_target(), tz = "CET")
+```

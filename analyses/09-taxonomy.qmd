@@ -1,0 +1,151 @@
+---
+title: "09-taxonomy"
+title-block-banner: true
+author:
+  - name: Jinlong Ru
+    orcid: 0000-0002-6757-6018
+date: 2025-04-04
+toc: true
+toc-depth: 4
+number-sections: true
+code-fold: true
+code-line-numbers: true
+code-tools: true
+format: 
+  html:
+    embed-resources: true
+    smooth-scroll: true
+    page-layout: full
+reference-location: section
+citation-location: document
+params:
+  name: "09-taxonomy"
+---
+
+The purpose of this document is to analyze and integrate viral taxonomy annotations from two different tools: VITAP and GeNomad. VITAP provides more detailed taxonomic classification down to the species level, while GeNomad classifies viruses to the family level but covers a broader range of genomes. This analysis aims to create a comprehensive taxonomy dataset by prioritizing VITAP annotations when available and falling back to GeNomad annotations when needed.
+
+```{r setup}
+#| message: false
+#| include: false
+#| warning: false
+wd <- "analyses"
+if (basename(getwd()) != wd) {
+  setwd(here::here(wd))
+}
+params <- list(name = "09-taxonomy")
+here::i_am(paste0(params$name, ".qmd"), uuid = "1186c35d-6ad8-43ae-8882-49e4004e3ce4")
+projthis::proj_create_dir_target(params$name, clean = FALSE)
+path_target <- projthis::proj_path_target(params$name)
+path_source <- projthis::proj_path_source(params$name)
+path_raw <- path_source("00-raw")
+path_resource <- here::here(path_raw, "d00-resource")
+path_data <- here::here(path_raw, paste0("d", params$name))
+dir.create(path_raw, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_data, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_resource, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r packages}
+#| message: false
+suppressPackageStartupMessages({
+  library(here)
+  library(conflicted)
+  library(tidyverse)
+  library(data.table)
+  devtools::load_all()
+})
+
+con <- qproj::proj_db_connect()
+```
+
+## Tasks
+
+```{r}
+df_taxonomy_vitap <- parse_vitap(here(path_data, "taxonomy_vitap.tsv"), contig_marker = "contig") %>%
+  dplyr::mutate(taxonomy_priority = 1)
+
+df_genomad <- parse_genomad_summary(here(path_data, "genomad_summary.tsv"))
+df_taxonomy_genomad <- parse_genomad_taxonomy(df_genomad) %>%
+  dplyr::mutate(taxonomy_priority = 2)
+
+# Combine taxonomy annotation from VITAP and GeNomad, and remove duplicates
+df_taxonomy <- bind_rows(df_taxonomy_vitap, df_taxonomy_genomad) %>%
+  # when duplicates, keep the VITAP annotation
+  dplyr::distinct(contig_id, .keep_all = TRUE)
+
+# write to file
+fwrite(df_taxonomy, path_target("taxonomy.tsv"), sep = "\t", quote = FALSE)
+```
+
+
+```{r}
+parse_taxonomy <- function(df_taxonomy) {
+  df_taxonomy2 <- df_taxonomy %>%
+    dplyr::filter(classify_type == "Viruses") %>%
+    dplyr::select(ctgid, realm, kingdom, phylum, class, order, family, genus, species) %>%
+    # remove rows where all taxonomy columns are empty
+    dplyr::filter(!dplyr::if_all(c("realm", "kingdom", "phylum", "class", "order", "family", "genus", "species"), ~ . == "")) %>%
+    # fill taxonomy columns with "[Taxa]_<Taxa>" if the column is empty but the next column is not empty
+    dplyr::mutate(
+      genus   = if_else(genus == "", paste0("[Genus]_", species), genus),
+      family  = if_else(family == "", paste0("[Family]_", str_replace_all(genus, "\\[Genus\\]_", "")), family),
+      order   = if_else(order == "", paste0("[Order]_", str_replace_all(family, "\\[Family\\]_", "")), order),
+      class   = if_else(class == "", paste0("[Class]_", str_replace_all(order, "\\[Order\\]_", "")), class),
+      phylum  = if_else(phylum == "", paste0("[Phylum]_", str_replace_all(class, "\\[Class\\]_", "")), phylum),
+      kingdom = if_else(kingdom == "", paste0("[Kingdom]_", str_replace_all(phylum, "\\[Phylum\\]_", "")), kingdom),
+      realm   = if_else(realm == "", paste0("[Realm]_", str_replace_all(kingdom, "\\[Kingdom\\]_", "")), realm),
+      # # remove cells ending with "_" (i.e. incomplete taxonomic names)
+      across(everything(), ~ if_else(str_ends(., "_"), "", .))
+    )
+
+  return(df_taxonomy2)
+}
+
+df_taxonomy_formatted <- fread(path_target("taxonomy.tsv")) %>%
+  # set all cells contains "[" and "]" to ""
+  dplyr::mutate(across(where(is.character), ~ifelse(grepl("\\[|\\]", .), "", .))) %>%
+  dplyr::mutate(
+    species = if_else(species != "", paste0("{species}_", species), species),
+    genus = if_else(genus != "", paste0("{genus}_", genus), genus),
+    family = if_else(family != "", paste0("{family}_", family), family),
+    order = if_else(order != "", paste0("{order}_", order), order),
+    class = if_else(class != "", paste0("{class}_", class), class),
+    phylum = if_else(phylum != "", paste0("{phylum}_", phylum), phylum),
+    kingdom = if_else(kingdom != "", paste0("{kingdom}_", kingdom), kingdom),
+    realm = if_else(realm != "", paste0("{realm}_", realm), realm)
+  ) %>%
+  dplyr::mutate(
+    genus = if_else(genus == "" & species != "", paste0("[Unclassified_Genus]_", species), genus),
+    family = if_else(family == "" & genus != "", paste0("[Unclassified_Family]_", genus), family),
+    order = if_else(order == "" & family != "", paste0("[Unclassified_Order]_", family), order),
+    class = if_else(class == "" & order != "", paste0("[Unclassified_Class]_", order), class),
+    phylum = if_else(phylum == "" & class != "", paste0("[Unclassified_Phylum]_", class), phylum),
+    kingdom = if_else(kingdom == "" & phylum != "", paste0("[Unclassified_Kingdom]_", phylum), kingdom),
+    realm = if_else(realm == "" & kingdom != "", paste0("[Unclassified_Realm]_", kingdom), realm)
+  ) %>%
+  dplyr::mutate(
+    kingdom = if_else(kingdom == "" & realm != "", paste0("[Novel_Kingdom]_", realm), kingdom),
+    phylum = if_else(phylum == "" & kingdom != "", paste0("[Novel_Phylum]_", kingdom), phylum),
+    class = if_else(class == "" & phylum != "", paste0("[Novel_Class]_", phylum), class),
+    order = if_else(order == "" & class != "", paste0("[Novel_Order]_", class), order),
+    family = if_else(family == "" & order != "", paste0("[Novel_Family]_", order), family),
+    genus = if_else(genus == "" & family != "", paste0("[Novel_Genus]_", family), genus),
+    species = if_else(species == "" & genus != "", paste0("[Novel_Species]_", genus), species)
+  ) %>%
+  # replace all "_[.*_[" with "_["
+  dplyr::mutate(across(everything(), ~str_replace_all(., "_\\[.*_\\{", "_{"))) %>%
+  dplyr::mutate(across(everything(), ~str_replace_all(., "^\\{.*\\}_", "")))
+
+# write to file
+fwrite(df_taxonomy_formatted, path_target("taxonomy_formatted.tsv"), sep = "\t", quote = FALSE)
+```
+
+
+## Files written
+
+These files have been written to the target directory, `r paste0("data/", params$name)`:
+
+```{r list-files-target}
+DBI::dbDisconnect(con)
+projthis::proj_dir_info(path_target(), tz = "CET")
+```

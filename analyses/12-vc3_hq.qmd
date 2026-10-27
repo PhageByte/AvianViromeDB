@@ -1,0 +1,266 @@
+---
+title: "12-vc3_hq"
+title-block-banner: true
+author:
+  - name: Jinlong Ru
+    orcid: 0000-0002-6757-6018
+date: 2025-04-04
+toc: true
+toc-depth: 4
+number-sections: true
+code-fold: true
+code-line-numbers: true
+code-tools: true
+format: 
+  html:
+    embed-resources: true
+    smooth-scroll: true
+    page-layout: full
+reference-location: section
+citation-location: document
+params:
+  name: "12-vc3_hq"
+---
+
+The purpose of this document is to identify high-quality vOTUs (vOTUs with high completeness and low contamination) and perform network analysis on them.
+
+```{r setup}
+#| message: false
+#| include: false
+#| warning: false
+wd <- "analyses"
+if (basename(getwd()) != wd) {
+  setwd(here::here(wd))
+}
+params <- list(name = "12-vc3_hq")
+here::i_am(paste0(params$name, ".qmd"), uuid = "bf96812f-8572-4a75-b459-ce4934ee1222")
+projthis::proj_create_dir_target(params$name, clean = FALSE)
+path_target <- projthis::proj_path_target(params$name)
+path_source <- projthis::proj_path_source(params$name)
+path_raw <- path_source("00-raw")
+path_resource <- here::here(path_raw, "d00-resource")
+path_data <- here::here(path_raw, paste0("d", params$name))
+dir.create(path_raw, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_data, recursive = TRUE, showWarnings = FALSE)
+dir.create(path_resource, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r packages}
+#| message: false
+suppressPackageStartupMessages({
+  library(here)
+  library(conflicted)
+  library(tidyverse)
+  library(data.table)
+  library(UpSetR)
+  library(ggvenn)
+  library(igraph)
+  library(tidygraph)
+  library(networkD3)
+  library(ggraph)
+  library(RCy3)
+  devtools::load_all()
+})
+
+con <- qproj::proj_db_connect()
+```
+
+## Tasks
+
+Contig longer than 10kb and classified as high quality or Complete by CheckV.
+
+Existing network nodes use `original_representative_id`; `contig_repid` identifies
+the member exported in the corrected catalog. Network topology retains its
+original sequence provenance.
+
+```{r}
+df_ctganno_filtered_vOTU <- DBI::dbGetQuery(con, "SELECT * FROM contig_annotation_filtered_vOTU") %>% 
+  dplyr::filter(contig_length > 10000) %>% 
+  dplyr::filter(checkv_quality_score %in% c(1,2))
+```
+
+```{r}
+df_ctganno_filtered_vOTU %>% 
+  dplyr::select(original_representative_id) %>%
+  distinct() %>% 
+  fwrite(path_target("vOTU_repid_hq.csv"), row.names = FALSE, col.names = FALSE)
+```
+
+Run `infomap` in Cytoscape, and export the informap cluster annotation to `infomap100.csv`.
+
+```{r node attr}
+df_infomap <- fread(here(path_data, "cytoscape/infomap100.csv")) %>% 
+  data.table::setnames(c("name", "__infomapCluster100"), c("id", "infomap_cluster_id")) %>% 
+  dplyr::select(c("id", "infomap_cluster_id"))
+
+df_nodes_attr <- fread(here(path_data, "cytoscape/nodes_extracted.csv")) %>% 
+  dplyr::left_join(df_ctganno_filtered_vOTU, by = c("GenomeName" = "original_representative_id")) %>%
+  dplyr::mutate(is_reference = ifelse(str_detect(GenomeName, "contig"), "no", "yes")) %>% 
+  dplyr::left_join(df_infomap, by = "id")
+
+fwrite(df_nodes_attr, path_target("nodes_attr.tsv"), sep = "\t")
+```
+
+```{r}
+infomap_prev <- df_nodes_attr %>% 
+  dplyr::group_by(infomap_cluster_id, is_reference) %>% 
+  dplyr::summarise(n = n()) %>% 
+  dplyr::ungroup()
+
+
+# add cluster size and novelty columns to the infomap clusters
+infomap_cluster_size <- df_nodes_attr %>% 
+  dplyr::group_by(infomap_cluster_id) %>% 
+  dplyr::summarise(infomap_cluster_size = n()) %>%
+  dplyr::ungroup() %>% 
+  dplyr::filter(!is.na(infomap_cluster_id))
+
+infomap_cluster_in_ref <- df_nodes_attr %>% 
+  dplyr::group_by(infomap_cluster_id, is_reference) %>% 
+  dplyr::summarise(n = n()) %>% 
+  dplyr::ungroup() %>% 
+  tidyr::pivot_wider(names_from = "is_reference", values_from = "n") %>% 
+  dplyr::mutate(infomap_cluster_novel = ifelse(is.na(yes), TRUE, FALSE)) %>% 
+  dplyr::filter(!is.na(infomap_cluster_id)) %>% 
+  dplyr::select(c("infomap_cluster_id", "infomap_cluster_novel")) %>% 
+  dplyr::inner_join(infomap_cluster_size, by = "infomap_cluster_id")
+
+# add infomap cluster size and novelty columns to the nodes_attr
+df_nodes_attr2 <- df_nodes_attr %>% 
+  dplyr::left_join(infomap_cluster_in_ref, by = "infomap_cluster_id")
+
+df_vOTUrep_infomap <- df_nodes_attr2 %>% 
+  dplyr::filter(is_reference == "no")
+
+DBI::dbWriteTable(con, "contig_annotation_filtered_vOTU_infomap", df_vOTUrep_infomap, overwrite = TRUE, row.names = FALSE)
+```
+
+
+```{r vOTU-AMG-prok-avian network}
+df_vOTUrep_infomap <- DBI::dbGetQuery(con, "SELECT * FROM contig_annotation_filtered_vOTU_infomap")
+
+# filter by by vOTU prevalence
+# df_infomap_novel_vOTU <- df_vOTUrep_infomap %>% 
+#   dplyr::filter(infomap_cluster_novel == TRUE) %>% 
+#   dplyr::filter(vOTU_prevalence >= 3)
+
+# filter by infomap cluster ID
+df_infomap_novel_vOTU <- df_vOTUrep_infomap %>% 
+  dplyr::filter(infomap_cluster_id == 44)
+
+df_infomap_novel_vOTU_contigs <- DBI::dbGetQuery(con, "SELECT * FROM contig_annotation_filtered") %>% 
+  dplyr::filter(original_representative_id %in% df_infomap_novel_vOTU$GenomeName)
+
+
+df_vOTU_to_prokaryote <- DBI::dbGetQuery(con, "SELECT * from host_filtered") %>% 
+  dplyr::filter(contig_id %in% df_infomap_novel_vOTU_contigs$contig_id) %>% 
+  # dplyr::mutate(target = str_replace_all(Host.taxonomy, ";s__.*", "")) %>% 
+  dplyr::mutate(target = str_replace_all(Host.taxonomy, ";f__.*", "")) %>% 
+  dplyr::mutate(target = str_replace_all(target, ".*;c__", "c__")) %>%
+  dplyr::select(c("contig_id", "target")) %>% 
+  dplyr::distinct() %>% 
+  dplyr::inner_join(df_infomap_novel_vOTU_contigs[,c("contig_id", "vOTU_id")], by="contig_id") %>% 
+  dplyr::select(c("vOTU_id", "target")) %>% 
+  dplyr::distinct() %>% 
+  dplyr::mutate(weight=1, edge_type = "Prokaryote")
+
+# df_vOTU_to_AMG <- DBI::dbGetQuery(con, "SELECT * from amg_dramv_filtered") %>% 
+#   dplyr::filter(contig_id %in% df_infomap_novel_vOTU_contigs$contig_id) %>% 
+#   dplyr::select(c("contig_id", "db_desc")) %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::inner_join(df_infomap_novel_vOTU_contigs[,c("contig_id", "vOTU_id")], by="contig_id") %>%
+#   dplyr::mutate(target = db_desc) %>%
+#   dplyr::select(c("vOTU_id", "target")) %>%
+#   dplyr::distinct() %>% 
+#   dplyr::mutate(weight = 1, edge_type = "AMG") %>% 
+#   dplyr::mutate(target = str_replace_all(target, "\\[.*", ""))
+
+df_vOTU_to_avian <- df_infomap_novel_vOTU %>% 
+  dplyr::select(c("vOTU_id", dplyr::matches("host_"))) %>% 
+  # put all "host_" columns into one column "avian_host" using pivot_longer if value is greater than 0
+  tidyr::pivot_longer(cols = dplyr::matches("host_"), names_to = "target", values_to = "weight") %>% 
+  dplyr::mutate(target = str_replace_all(target, "host_", "")) %>%
+  dplyr::filter(weight > 0) %>% 
+  dplyr::mutate(weight = weight/max(weight)) %>%
+  dplyr::mutate(edge_type = "Avian")
+```
+
+
+```{r network}
+# create a network using the df_vOTU_to_prokaryote, df_vOTU_to_AMG, and df_vOTU_to_avian data
+df_edges <- dplyr::bind_rows(df_vOTU_to_prokaryote, df_vOTU_to_avian) %>% 
+  dplyr::rename(source = vOTU_id)
+
+df_nodes <- data.frame(id = unique(c(df_edges$source, df_edges$target))) %>% 
+  dplyr::mutate(nodes_type = ifelse(id %in% df_vOTU_to_prokaryote$target, "Prokaryote", 
+                                    ifelse(id %in% df_vOTU_to_AMG$target, "AMG", 
+                                           ifelse(id %in% df_vOTU_to_avian$target, "Avian", "vOTU"))))
+
+# create a network using the df_edges and df_nodes with the tidygraph package
+g_tidy <- tidygraph::as_tbl_graph(df_edges, directed = FALSE)
+
+# add the nodes_type to the nodes
+g_tidy <- g_tidy %>% 
+  dplyr::left_join(df_nodes, by = c("name" = "id"))
+```
+
+
+```{r network cytoscape}
+# Check Cytoscape connection
+cytoscapePing()
+
+# Create a new network in Cytoscape
+createNetworkFromIgraph(g_tidy, title = "net4family_cl44")
+
+# First, make sure we have a style
+style_name <- "pc028e3net42"
+# Create a new style first
+
+# if(style_name %in% getVisualStyleNames()) {
+  # deleteVisualStyle(style_name)
+# }
+
+# Create new style by copying from default
+# copyVisualStyle("default", style_name)
+setVisualStyle(style_name)
+
+# Now apply mappings to our style
+setNodeColorDefault("#F1FF1F", style.name=style_name)
+
+# Manually set node colors by type
+node_type_mapping <- data.frame(
+  nodes_type = c("vOTU", "Prokaryote", "AMG", "Avian"),
+  color = c("#1f77b4", "#2ca02c", "#d62728", "#ff7f0e")
+)
+
+# loadTableData(node_type_mapping, data.key.column = "nodes_type", table.key.column = "nodes_type", table = "node")
+
+# Apply node visual properties with basic discrete mapping
+setNodeColorMapping(table.column = "nodes_type",
+                    table.column.values = node_type_mapping$nodes_type,
+                    colors = node_type_mapping$color,
+                   mapping.type = "discrete", 
+                   style.name = style_name)
+
+# Set node shapes similarly
+setNodeShapeDefault("ELLIPSE", style.name=style_name)
+
+# Apply a layout
+layoutNetwork("force-directed defaultSpringCoefficient=.00001 defaultSpringLength=100")
+
+# Export as image
+exportImage(path_target("vOTU_network.png"), "PNG", height = 2000, width = 2000)
+  
+
+# Save the network data for potential reuse
+saveRDS(g_tidy, path_target("vOTU_network.rds"))
+```
+
+
+```{r}
+df_s6 <- DBI::dbGetQuery(con, "SELECT * from amg_dramv WHERE db_desc='small subunit ribosomal protein S6'")
+
+df_s6_contig <- DBI::dbGetQuery(con, "SELECT * from contig_annotation_filtered") %>% 
+  dplyr::filter(contig_id %in% df_s6$contig_id)
+```
+
