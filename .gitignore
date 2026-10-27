@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.quarto
+.DS_Store
+._*
+__pycache__/
+analyses/data/
+analyses/*.html
+analyses/*_files/
+analyses/*_cache/
+*.sqlite
+www/catalog-summary.json

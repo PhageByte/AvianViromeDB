@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse catalog · Metadata preview | AvianViromeDB</title>
+  <link rel="icon" href="favicon.ico">
+  <script src="browse.js" defer></script>
+  <style>
+    :root { font-family: Inter, system-ui, sans-serif; color: #1e293b; background: #f8fafc; line-height: 1.6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header, main, footer { max-width: 1240px; margin: auto; padding: 1.5rem; }
+    header { display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid #cbd5e1; }
+    header img { width: 42px; height: 42px; object-fit: contain; }
+    a { color: #0d6b6d; text-underline-offset: 3px; }
+    h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.2; color: #172554; margin: .8rem 0; }
+    h2 { color: #054b4d; font-size: 1.2rem; margin: 0 0 1rem; }
+    .eyebrow { color: #0d6b6d; font-size: .8rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .note { color: #475569; font-size: .94rem; }
+    .scope { border-left: 4px solid #0d6b6d; background: #eef7f6; padding: .8rem 1rem; margin: 1.5rem 0; }
+    section { background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 1.25rem; margin: 1.5rem 0; }
+    fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+    .filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+    label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; font-weight: 600; }
+    input, select, button { font: inherit; min-height: 44px; border: 1px solid #94a3b8; border-radius: 6px; padding: .55rem .7rem; }
+    input, select { width: 100%; background: white; color: #1e293b; }
+    button { background: white; color: #054b4d; cursor: pointer; font-weight: 600; }
+    button.primary { background: #0d6b6d; color: white; border-color: #0d6b6d; }
+    button:hover:not(:disabled) { background: #e2f0ef; color: #054b4d; }
+    button:disabled { opacity: .5; cursor: default; }
+    :focus-visible { outline: 3px solid #0891b2; outline-offset: 3px; }
+    .toolbar, .pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin: 1rem 0; }
+    .actions, .page-buttons { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    #result-count { font-weight: 650; }
+    .table-scroll { width: 100%; overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; }
+    table { width: 100%; min-width: 1190px; border-collapse: collapse; font-size: .85rem; }
+    caption { text-align: left; padding: .8rem; color: #475569; background: #f8fafc; }
+    th, td { padding: .75rem .8rem; text-align: left; vertical-align: top; border-bottom: 1px solid #e2e8f0; }
+    th { background: #eff6f7; color: #054b4d; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    td:first-child { font-weight: 650; color: #172554; white-space: nowrap; }
+    td:nth-child(2) { white-space: nowrap; }
+    td:nth-child(n+3):nth-child(-n+6) { font-variant-numeric: tabular-nums; }
+    th:nth-child(9), td:nth-child(9) { min-width: 150px; white-space: nowrap; }
+    th:nth-child(10), td:nth-child(10) { min-width: 135px; overflow-wrap: normal; }
+    #page-number { width: 6rem; }
+    .jump { display: flex; flex-direction: row; align-items: center; gap: .5rem; }
+    #error { color: #9f1239; }
+    footer { font-size: .94rem; }
+    @media (max-width: 850px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { header, main, footer { padding: 1rem; } section { padding: 1rem; } .filters { grid-template-columns: 1fr; } .toolbar { align-items: flex-start; flex-direction: column; } .page-buttons { gap: .35rem; } .page-buttons button { padding: .5rem .6rem; } }
+  </style>
+</head>
+<body>
+  <header><img src="logo.png" alt=""><a href="index.html">AvianViromeDB</a><a href="feedback.html">Feedback</a></header>
+  <main>
+    <div class="eyebrow">Metadata preview</div>
+    <h1>Browse the catalog</h1>
+    <p>Find vOTUs by identifier, genome quality, length and bird source. Download the metadata for your selection.</p>
+    <div class="scope"><strong>Catalog metadata preview.</strong> Browse 61,608 vOTUs of varying completeness from a DNA-focused catalog based on 2,658 public source records. Sequence and annotation downloads remain the <a href="https://doi.org/10.5281/zenodo.18357633">January 23, 2026 archived release</a>. An updated data archive is pending.</div>
+    <section aria-labelledby="filter-heading">
+      <h2 id="filter-heading">Filter records</h2>
+      <form id="filter-form">
+        <fieldset id="filter-fields" disabled>
+          <div class="filters">
+            <label>vOTU or representative ID<input id="query" type="search" placeholder="e.g. vOTU000004" autocomplete="off"></label>
+            <label>CheckV quality<select id="quality"><option value="">All quality tiers</option><option>Complete</option><option>High</option><option>Medium</option><option>Low</option><option>Unknown</option></select></label>
+            <label>Bird source group<select id="source"><option value="">All source groups</option></select></label>
+            <label>Minimum length (bp)<input id="min-length" type="number" min="0" step="1" placeholder="No minimum"></label>
+            <label>Maximum length (bp)<input id="max-length" type="number" min="0" step="1" placeholder="No maximum"></label>
+            <label>Source assignment<select id="coverage"><option value="">All assignment states</option><option>Assigned for all members</option><option>Assigned for some members</option><option>Unresolved for all members</option></select></label>
+          </div>
+          <div class="toolbar"><button type="reset">Reset filters</button><span class="note">Filters combine. Length limits are inclusive.</span></div>
+        </fieldset>
+      </form>
+      <p class="note">Bird groups describe source metadata. Assignment states summarize the retained members of each vOTU; unresolved entries include missing metadata and unresolved bird categories.</p>
+    </section>
+    <div class="toolbar"><div id="result-count" role="status" aria-live="polite">Loading catalog…</div><div class="actions"><button id="download" class="primary" disabled>Download filtered TSV</button></div></div>
+    <p id="error" role="alert" hidden></p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Catalog results; scroll horizontally to see all columns">
+      <table>
+        <caption>Class and family show catalog annotations, with unresolved assignments labeled unassigned. TSV exports contain the displayed metadata. Completeness and contamination are CheckV estimates (%).</caption>
+        <thead><tr><th scope="col">vOTU</th><th scope="col">Representative</th><th scope="col">Length (bp)</th><th scope="col">CheckV tier</th><th scope="col">Completeness (%)</th><th scope="col">Contamination (%)</th><th scope="col">Source assignment</th><th scope="col">Bird source groups</th><th scope="col">Class</th><th scope="col">Family</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span id="page-summary">50 records per page</span>
+      <div class="page-buttons"><button id="first" disabled>First</button><button id="previous" disabled>Previous</button><button id="next" disabled>Next</button><button id="last" disabled>Last</button></div>
+      <form id="page-form" class="actions"><label class="jump" for="page-number">Page<input id="page-number" type="number" min="1" value="1" disabled></label><button id="go" disabled>Go</button></form>
+    </div>
+    <noscript><p>This catalog browser needs JavaScript. Download the archived data from the project home page.</p></noscript>
+  </main>
+  <footer><a href="index.html#download">Database downloads</a> · <a href="feedback.html">Report a data issue</a></footer>
+</body>
+</html>

@@ -1,0 +1,1556 @@
+---
+title: "Catalog figures"
+date: today
+params:
+  name: "101-revision-figures"
+---
+
+**Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S %Z')`.**
+
+This step draws catalog figures from the step 100 tables and release package,
+the working database and the source-metadata workbook.
+
+```{r}
+#| label: params
+#| eval: !expr interactive()
+#| include: false
+params <- list(name = "101-revision-figures")
+```
+
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+#| warning: false
+#| cache: false
+options(warnPartialMatchDollar = TRUE)
+wd <- "analyses"
+if (basename(getwd()) != wd) {
+    setwd(here::here(wd))
+}
+here::i_am("101-revision-figures.qmd", uuid = "24b45b2d-4375-4947-876f-ed5556355081")
+qproj::proj_create_dir_target(params$name)
+
+# convenience helpers
+path_target <- qproj::proj_path_target(params$name)
+path_source <- qproj::proj_path_source(params$name)
+path_raw <- path_source("00-raw")
+path_resource <- here::here(path_raw, "d00-resource")
+path_data <- here::here(path_raw, paste0("d", params$name))
+```
+
+```{r}
+#| label: packages
+#| message: false
+#| warning: false
+#| cache: false
+suppressPackageStartupMessages({
+  library(here)
+  library(conflicted)
+  library(tidyverse)
+  library(data.table)
+  library(patchwork)
+})
+conflicted::conflicts_prefer(
+  dplyr::filter,
+  dplyr::lag,
+  dplyr::first,
+  dplyr::last,
+  dplyr::between,
+  dplyr::setdiff,
+  .quiet = TRUE
+)
+```
+
+## Shared style
+
+Category colors are shared across figures. CheckV quality tiers use an ordinal
+navy-to-beige palette.
+
+```{r}
+#| label: figure-style
+#| cache: false
+pal_map <- c("Chicken" = "#0072B2", "Duck" = "#D55E00", "Goose" = "#009E73",
+  "Quail" = "#E69F00", "Swan" = "#332288", "Crane" = "#88CCEE",
+  "Greenshank" = "#44AA99", "Egret" = "#882255", "Pigeon" = "#CC79A7",
+  "Bird (unspecified)" = "#9E9E9E")
+pal_category <- c(pal_map[c("Chicken", "Duck", "Goose", "Quail", "Pigeon")],
+  "Other waterbirds" = "#56B4E9", pal_map["Bird (unspecified)"])
+pal_group <- c("Chicken" = "#0072B2", "Duck" = "#D55E00", "Goose" = "#009E73",
+  "Other birds" = "#8E6BBF", "Unassigned" = "#C8C8C8")
+pal_quality <- c("Complete" = "#1B2A49", "High" = "#3C6E9F", "Medium" = "#6DBCB9",
+  "Low" = "#E8DFB0")
+pal_lifestyle <- c("Virulent" = "#DE6B66", "Temperate" = "#35BDC8")
+pal_function <- c("MISC" = "#C55AC5", "Organic Nitrogen" = "#E39B2D",
+  "Carbon utilization" = "#4FA8E8", "Transporters" = "#2E9E3A", "Energy" = "#2A5DA8",
+  "Unclassified" = "#9E9E9E")
+pal_phylum <- c("Bacillota_A" = "#CC79A7", "Bacillota" = "#0072B2",
+  "Bacteroidota" = "#E69F00", "Pseudomonadota" = "#56B4E9", "Actinomycetota" = "#009E73",
+  "Bacillota_C" = "#D55E00", "Other phyla" = "#D9C8A9",
+  "Multiple predicted phyla" = "#4D4D4D", "Phylum unassigned" = "#C8C8C8")
+waterbirds <- c("Swan", "Crane", "Greenshank", "Egret")
+map_class <- function(category) {
+  dplyr::case_when(is.na(category) ~ "Bird (unspecified)",
+    category %in% waterbirds ~ "Other waterbirds", TRUE ~ category)
+}
+source_group <- function(category, metadata_matched) {
+  dplyr::case_when(!metadata_matched ~ "Unassigned",
+    category %in% c("Chicken", "Duck", "Goose") ~ category, TRUE ~ "Other birds")
+}
+theme_pub <- function(base_size = 7, base_family = "Arial") {
+  ggplot2::theme_classic(base_size = base_size, base_family = base_family) +
+    ggplot2::theme(
+      axis.line = ggplot2::element_line(linewidth = 0.3, colour = "black"),
+      axis.ticks = ggplot2::element_line(linewidth = 0.3, colour = "black"),
+      axis.text = ggplot2::element_text(size = base_size - 0.5, colour = "black"),
+      axis.title = ggplot2::element_text(size = base_size),
+      legend.title = ggplot2::element_text(size = base_size, face = "bold"),
+      legend.text = ggplot2::element_text(size = base_size - 0.5),
+      legend.key.size = grid::unit(3, "mm"),
+      plot.title = ggplot2::element_text(size = base_size + 1, face = "bold"),
+      plot.tag = ggplot2::element_text(size = base_size + 3, face = "bold"),
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(size = base_size, face = "bold"))
+}
+panel_tag <- function(p, tag) {
+  patchwork::wrap_elements(full = p) + ggplot2::labs(tag = tag) +
+    ggplot2::theme(plot.tag = ggplot2::element_text(size = 10, face = "bold", family = "Arial"))
+}
+upset_panel <- function(df, sets, ylab, upright_counts = FALSE) {
+  count_text <- if (upright_counts) list(size = 1.9, family = "Arial", vjust = -0.5) else
+    list(size = 1.6, family = "Arial", angle = 90, hjust = -0.15, vjust = 0.5)
+  ComplexUpset::upset(df, sets, name = NULL, width_ratio = 0.28, min_size = 1,
+    sort_sets = FALSE,
+    base_annotations = list(ylab = ComplexUpset::intersection_size(
+      text = count_text, bar_number_threshold = 1,
+      text_mapping = ggplot2::aes(label = scales::comma(exclusive_intersection_size)),
+      mapping = ggplot2::aes(fill = "bar"), width = 0.7) +
+      ggplot2::scale_fill_manual(values = c(bar = "#00315A"), guide = "none") +
+      ggplot2::scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+        expand = ggplot2::expansion(c(0, 0.22))) +
+      ggplot2::labs(y = ylab) + theme_pub(6.5) +
+      ggplot2::theme(axis.title.x = ggplot2::element_blank(), axis.text.x = ggplot2::element_blank(),
+        axis.ticks.x = ggplot2::element_blank())) |> stats::setNames(ylab),
+    set_sizes = ComplexUpset::upset_set_size(geom = ggplot2::geom_bar(fill = "#DE6B66", width = 0.6)) +
+      ggplot2::scale_y_reverse(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+        breaks = scales::breaks_extended(3)) +
+      ggplot2::labs(y = "Set size") + theme_pub(6) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(size = 5.5),
+        axis.text.y = ggplot2::element_blank(), axis.title.y = ggplot2::element_blank(),
+        axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank()),
+    matrix = ComplexUpset::intersection_matrix(
+      geom = ggplot2::geom_point(size = 1.4),
+      segment = ggplot2::geom_segment(linewidth = 0.4, colour = "#5B7896"),
+      outline_color = list(active = "#5B7896", inactive = "#E3E3E3")) +
+      ggplot2::scale_color_manual(values = c("TRUE" = "#5B7896", "FALSE" = "#E3E3E3"),
+        guide = "none"),
+    stripes = ComplexUpset::upset_stripes(colors = c("#FBEAD5", "white")),
+    themes = ComplexUpset::upset_default_themes(text = ggplot2::element_text(size = 6.5,
+      family = "Arial")))
+}
+save_pub_r <- function(plot, filename, width_mm = 183, height_mm = 120, dpi = 600) {
+  width_in <- width_mm / 25.4
+  height_in <- height_mm / 25.4
+  svglite::svglite(paste0(filename, ".svg"), width = width_in, height = height_in,
+    system_fonts = list(sans = "Arial"))
+  print(plot); grDevices::dev.off()
+  grDevices::cairo_pdf(paste0(filename, ".pdf"), width = width_in, height = height_in,
+    family = "Arial")
+  print(plot); grDevices::dev.off()
+  ragg::agg_tiff(paste0(filename, ".tiff"), width = width_in, height = height_in,
+    units = "in", res = dpi, compression = "lzw")
+  print(plot); grDevices::dev.off()
+  ragg::agg_png(paste0(filename, "-preview.png"), width = width_in, height = height_in,
+    units = "in", res = 300)
+  print(plot); grDevices::dev.off()
+  invisible(filename)
+}
+```
+
+## Inputs
+
+```{r}
+#| label: figure-inputs
+#| cache: false
+path_revision <- path_source("100-reviewer-revision")
+path_release <- file.path(path_revision, "release")
+df_annotation <- readr::read_tsv(file.path(path_release, "vOTU_annotation.tsv.gz"),
+  show_col_types = FALSE, guess_max = 70000)
+df_inventory <- readxl::read_excel(file.path(path_revision, "source-metadata-audit.xlsx"),
+  sheet = "samples", col_types = "text")
+df_locations_raw <- readxl::read_excel(here::here(path_raw, "pc028e3-metadata.xlsx"),
+  col_types = "text") |>
+  dplyr::distinct(sample_id, geo_loc_name)
+df_member_sources <- readr::read_tsv(file.path(path_revision, "figure-source-members.tsv"),
+  show_col_types = FALSE, guess_max = 120000)
+df_votu_sources <- readr::read_tsv(file.path(path_revision, "figure-source-votus.tsv"),
+  show_col_types = FALSE)
+stopifnot(nrow(df_annotation) == 61608, nrow(df_inventory) == 2658,
+  !anyDuplicated(df_locations_raw$sample_id), nrow(df_member_sources) == 114375,
+  nrow(df_votu_sources) == 61608)
+df_annotation <- df_annotation |>
+  dplyr::mutate(quality = factor(names(pal_quality)[checkv_quality_score],
+      levels = names(pal_quality)),
+    near_complete = checkv_completeness > 90 & checkv_contamination <= 5)
+stopifnot(sum(df_annotation$near_complete) == 12939, !anyNA(df_annotation$quality))
+# Exact member IDs determine metadata coverage independently of category resolution.
+df_member_groups <- df_member_sources |>
+  dplyr::distinct(vOTU_id,
+    group = source_group(bird_category, !is.na(metadata_sample_id)))
+```
+
+## Figure 1: source-record map
+
+Pie areas scale with the number of source records at each location. Country-level
+pies cover the world map, with China combined; the inset resolves the Chinese
+provincial-level regions. Location names follow the source metadata after spelling
+normalization; city names are assigned to their provinces. Coordinates are
+provincial capitals or national reference points.
+
+```{r}
+#| label: figure1-map
+#| cache: false
+location_rules <- c(
+  "^China: ?(Hunan|Changsha)$" = "China:Hunan", "^China: ?Beijing$" = "China:Beijing",
+  "^China: ?(Jiangsu|JiangSu|JiangShu|Yangzhou|Nantong|Yancheng|Huaian|Nanjing|Suzhou|Taizhou)$" = "China:Jiangsu",
+  "^China: ?(Zhejiang|ZheJiang|lanxi|Hangzhou|HangZhou|HaiYan|Jiaxing|ShaoXing)$" = "China:Zhejiang",
+  "^China: ?Sichuan$" = "China:Sichuan",
+  "^China: ?(Jiangxi|Nanchang|JiAn|Jiangxi Poyanghu)$" = "China:Jiangxi",
+  "^China: ?(Guandong|GuangDong|shenzhen|Shenzhen)$" = "China:Guangdong",
+  "^China: ?(Shandong|ShanDong)$" = "China:Shandong", "^China: ?Shanxi$" = "China:Shanxi",
+  "^China: ?(Henan|HeNan)$" = "China:Henan",
+  "^China: ?(Qinghai|Qinghai Gengga Lake)$" = "China:Qinghai", "^China: ?Tibet$" = "China:Tibet",
+  "^China: ?Harbin$" = "China:Heilongjiang", "^China: ?FuJian$" = "China:Fujian",
+  "^China: ?HeBei$" = "China:Hebei", "^China: ?ShangHai$" = "China:Shanghai",
+  "^China: ?InnerMogonia$" = "China:Inner Mongolia", "^China: ?GuiZhou$" = "China:Guizhou",
+  "^China: ?(Yichang|Huanggang|Huangshi|Jingzhou)$" = "China:Hubei",
+  "^China: ?AnHui$" = "China:Anhui",
+  "^Austria.*$" = "Austria", "^United Kingdom.*$" = "United Kingdom", "^Canada.*$" = "Canada",
+  "^USA.*$" = "USA")
+normalize_location <- function(x) {
+  out <- rep(NA_character_, length(x))
+  for (pattern in names(location_rules)) {
+    hit <- is.na(out) & grepl(pattern, x)
+    out[hit] <- location_rules[[pattern]]
+  }
+  dplyr::coalesce(out, x)
+}
+df_location_coordinates <- tibble::tribble(
+  ~location,               ~lat,   ~long,
+  "Austria",               47.60,  14.10,
+  "United Kingdom",        52.60,  -1.50,
+  "Canada",                53.90, -116.60,
+  "USA",                   41.60,  -73.00,
+  "Belgium",               50.60,   4.60,
+  "Denmark",               56.00,   9.50,
+  "France",                46.60,   2.30,
+  "Germany",               51.20,  10.40,
+  "Italy",                 42.80,  12.60,
+  "Netherlands",           52.20,   5.50,
+  "Poland",                52.10,  19.40,
+  "Spain",                 40.40,  -3.70,
+  "Bulgaria",              42.70,  25.30,
+  "China",                 35.00, 104.00,
+  "China:Hunan",           28.23, 112.94,
+  "China:Beijing",         39.90, 116.41,
+  "China:Jiangsu",         32.06, 118.80,
+  "China:Zhejiang",        30.27, 120.16,
+  "China:Sichuan",         30.66, 104.07,
+  "China:Jiangxi",         28.68, 115.86,
+  "China:Guangdong",       23.13, 113.26,
+  "China:Shandong",        36.65, 117.12,
+  "China:Shanxi",          37.87, 112.55,
+  "China:Henan",           34.75, 113.63,
+  "China:Qinghai",         36.62, 101.78,
+  "China:Tibet",           29.65,  91.12,
+  "China:Heilongjiang",    45.80, 126.53,
+  "China:Fujian",          26.07, 119.30,
+  "China:Hebei",           38.04, 114.51,
+  "China:Shanghai",        31.23, 121.47,
+  "China:Inner Mongolia",  40.84, 111.75,
+  "China:Guizhou",         26.65, 106.63,
+  "China:Hubei",           30.59, 114.31,
+  "China:Anhui",           31.82, 117.23)
+df_map_records <- df_inventory |>
+  dplyr::left_join(df_locations_raw, by = c(source_sample_identifier = "sample_id"),
+    relationship = "many-to-one") |>
+  dplyr::mutate(location = normalize_location(geo_loc_name),
+    country = ifelse(grepl("^China", location), "China", location),
+    map_class = dplyr::coalesce(bird_category, "Bird (unspecified)"))
+stopifnot(!anyNA(df_map_records$geo_loc_name),
+  all(df_map_records$location %in% df_location_coordinates$location),
+  all(df_map_records$country %in% df_location_coordinates$location))
+pie_table <- function(df, level) {
+  df |>
+    dplyr::count(location = .data[[level]], map_class, name = "records") |>
+    tidyr::pivot_wider(names_from = map_class, values_from = records, values_fill = 0) |>
+    dplyr::mutate(total = rowSums(dplyr::across(dplyr::any_of(names(pal_map))))) |>
+    dplyr::left_join(df_location_coordinates, by = "location", relationship = "one-to-one")
+}
+df_pies_world <- pie_table(df_map_records, "country")
+df_pies_china <- pie_table(dplyr::filter(df_map_records, country == "China"), "location") |>
+  dplyr::mutate(label = sub("^China:", "", location))
+for (column in setdiff(names(pal_map), names(df_pies_world))) df_pies_world[[column]] <- 0
+for (column in setdiff(names(pal_map), names(df_pies_china))) df_pies_china[[column]] <- 0
+stopifnot(sum(df_pies_world$total) == 2658, sum(df_pies_china$total) ==
+  df_pies_world$total[df_pies_world$location == "China"])
+radius_world <- function(n) sqrt(n) / 3
+# Austria is displaced north-east of the dense European cluster and joined by a leader line.
+df_pies_world <- df_pies_world |>
+  dplyr::mutate(x_plot = ifelse(location == "Austria", long + 41, long),
+    y_plot = ifelse(location == "Austria", lat + 11, lat),
+    r = radius_world(total),
+    label = dplyr::recode(location, "United Kingdom" = "UK"))
+# Fixed label positions keep the dense European labels in two aligned columns.
+df_world_labels <- tibble::tribble(
+  ~location,        ~x_lab, ~y_lab, ~hjust,
+  "United Kingdom",  -14,    58.5,   1,
+  "Netherlands",     -14,    54.0,   1,
+  "Belgium",         -14,    49.5,   1,
+  "France",          -14,    45.0,   1,
+  "Spain",           -14,    40.5,   1,
+  "Denmark",          28,    61.0,   0,
+  "Poland",           28,    56.5,   0,
+  "Germany",          28,    51.5,   0,
+  "Italy",            28,    43.5,   0,
+  "Bulgaria",         28,    39.0,   0,
+  "Austria",          55.1,  45.0,   0.5,
+  "Canada",         -116.6,  47.5,   0.5,
+  "USA",             -73.0,  37.0,   0.5,
+  "China",           104.0,  18.5,   0.5) |>
+  dplyr::left_join(df_pies_world |> dplyr::select(location, label, x_plot, y_plot, r),
+    by = "location", relationship = "one-to-one")
+stopifnot(setequal(df_world_labels$location, df_pies_world$location))
+class_counts <- df_map_records |> dplyr::count(map_class, name = "records")
+stopifnot(identical(class_counts$records[match(names(pal_map), class_counts$map_class)],
+  c(2009L, 459L, 71L, 40L, 15L, 11L, 8L, 5L, 3L, 37L)))
+class_labels <- stats::setNames(paste0(names(pal_map), " (", scales::comma(
+  class_counts$records[match(names(pal_map), class_counts$map_class)]), ")"), names(pal_map))
+world <- ggplot2::map_data("world") |> dplyr::filter(region != "Antarctica")
+# Union adjacent land polygons so raster antialiasing leaves a continuous fill.
+land_polygons <- lapply(split(world, world$group),
+  function(polygon) list(x = polygon$long, y = polygon$lat))
+land_polygons <- polyclip::polyclip(land_polygons, land_polygons, op = "union")
+df_land <- purrr::imap_dfr(land_polygons,
+  ~ tibble::tibble(long = .x$x, lat = .x$y, polygon = .y))
+coastline <- maps::map("world", interior = FALSE, plot = FALSE)
+df_coastline <- tibble::tibble(long = coastline$x, lat = coastline$y,
+  group = cumsum(is.na(coastline$x))) |> dplyr::filter(!is.na(long), lat > -60)
+size_breaks <- c(20, 200, 1000)
+df_size_legend <- tibble::tibble(records = size_breaks, r = radius_world(size_breaks),
+  x0 = -150, y0 = -50 + radius_world(size_breaks))
+p_world <- ggplot2::ggplot() +
+  ggplot2::geom_polygon(data = df_land,
+    ggplot2::aes(long, lat, group = 1, subgroup = polygon), rule = "evenodd",
+    fill = "#E3E3E3", colour = NA) +
+  ggplot2::geom_path(data = df_coastline, ggplot2::aes(long, lat, group = group),
+    colour = "#BDBDBD", linewidth = 0.08) +
+  ggplot2::geom_segment(data = dplyr::filter(df_pies_world, location == "Austria"),
+    ggplot2::aes(x = long, y = lat, xend = x_plot - 0.75 * r, yend = y_plot - 0.66 * r),
+    linewidth = 0.25, colour = "grey30") +
+  ggplot2::geom_segment(data = dplyr::filter(df_world_labels, abs(hjust - 0.5) > 0.1),
+    ggplot2::aes(x = x_plot, y = y_plot, xend = x_lab + ifelse(hjust == 1, 0.8, -0.8),
+      yend = y_lab), linewidth = 0.2, colour = "grey45") +
+  scatterpie::geom_scatterpie(data = df_pies_world,
+    ggplot2::aes(x = x_plot, y = y_plot, group = location, r = r),
+    cols = names(pal_map), colour = NA) +
+  ggplot2::geom_text(data = df_world_labels, ggplot2::aes(x = x_lab, y = y_lab,
+    label = label, hjust = hjust), size = 2.1, family = "Arial") +
+  ggforce::geom_circle(data = df_size_legend, ggplot2::aes(x0 = x0, y0 = y0, r = r),
+    linewidth = 0.25, colour = "grey25", fill = NA) +
+  ggplot2::geom_segment(data = df_size_legend, ggplot2::aes(x = x0, xend = x0 + 15,
+    y = y0 + r, yend = y0 + r), linewidth = 0.2, colour = "grey25") +
+  ggplot2::geom_text(data = df_size_legend, ggplot2::aes(x = x0 + 16, y = y0 + r,
+    label = scales::comma(records)), hjust = 0, size = 1.9, family = "Arial") +
+  ggplot2::annotate("text", x = -150 - radius_world(1000), y = -50 + 2 * radius_world(1000) + 4,
+    label = "Records", hjust = 0, size = 2.1, family = "Arial", fontface = "bold") +
+  ggplot2::annotate("label", x = -62, y = -44, hjust = 0, vjust = 0.5, size = 2.3,
+    family = "Arial", label.size = 0.25, label.padding = grid::unit(1.5, "mm"),
+    lineheight = 1.15,
+    label = paste0(scales::comma(nrow(df_map_records)), " source records\n",
+      dplyr::n_distinct(df_map_records$project_id), " BioProjects\n",
+      dplyr::n_distinct(df_map_records$country), " countries; ",
+      nrow(df_pies_china), " provincial-level regions in China")) +
+  ggplot2::scale_fill_manual(values = pal_map, breaks = names(pal_map), labels = class_labels,
+    name = "Source category (records)") +
+  ggplot2::coord_equal(xlim = c(-170, 180), ylim = c(-56, 80), expand = FALSE) +
+  ggplot2::theme_void(base_size = 7, base_family = "Arial") +
+  ggplot2::theme(legend.position = c(0.01, 0.52), legend.justification = c(0, 0.5),
+    legend.title = ggplot2::element_text(size = 6.5, face = "bold"),
+    legend.text = ggplot2::element_text(size = 6), legend.key.size = grid::unit(2.6, "mm"))
+p_china <- ggplot2::ggplot() +
+  ggplot2::geom_polygon(data = df_land,
+    ggplot2::aes(long, lat, group = 1, subgroup = polygon), rule = "evenodd",
+    fill = "#E3E3E3", colour = NA) +
+  ggplot2::geom_path(data = df_coastline, ggplot2::aes(long, lat, group = group),
+    colour = "#BDBDBD", linewidth = 0.15) +
+  scatterpie::geom_scatterpie(data = df_pies_china,
+    ggplot2::aes(x = long, y = lat, group = location, r = sqrt(total) / 6.5),
+    cols = names(pal_map), colour = NA) +
+  ggrepel::geom_text_repel(data = df_pies_china, ggplot2::aes(long, lat, label = label),
+    size = 1.75, family = "Arial", segment.size = 0.15, segment.colour = "grey40",
+    box.padding = 0.2, point.padding = 0.5, min.segment.length = 0, force = 2,
+    max.overlaps = Inf, seed = 101) +
+  ggplot2::scale_fill_manual(values = pal_map, guide = "none") +
+  ggplot2::coord_equal(xlim = c(86, 131), ylim = c(19, 50), expand = FALSE) +
+  ggplot2::labs(title = "China") +
+  ggplot2::theme_void(base_size = 6.5, base_family = "Arial") +
+  ggplot2::theme(plot.title = ggplot2::element_text(size = 6.5, face = "bold",
+      margin = ggplot2::margin(1, 0, 1, 2)),
+    panel.border = ggplot2::element_rect(colour = "grey45", fill = NA, linewidth = 0.4),
+    plot.background = ggplot2::element_rect(fill = "white", colour = NA))
+figure1 <- cowplot::ggdraw(p_world) +
+  cowplot::draw_plot(p_china, x = 0.705, y = 0.0, width = 0.295, height = 0.58)
+save_pub_r(figure1, path_target("figure1-source-map"), height_mm = 82)
+readr::write_tsv(dplyr::bind_rows(world = df_pies_world |> dplyr::select(-label),
+  china = df_pies_china |> dplyr::select(-label), .id = "map") |>
+  dplyr::select(map, location, dplyr::all_of(names(pal_map)), dplyr::everything()),
+  path_target("figure1-location-counts.tsv"))
+```
+
+## Figure 2: catalog quality, lengths and source categories
+
+Panels a–c describe the full catalog by CheckV quality tier. Panel d compares source
+categories; its length column uses only the 12,939 near-complete representatives.
+Swan, Crane, Greenshank and Egret form Other waterbirds; a vOTU contributes to every
+category among its retained members with an exact metadata match. Matched members
+with an unresolved category contribute to Bird (unspecified).
+
+```{r}
+#| label: figure2-catalog
+#| cache: false
+category_levels <- names(pal_category)
+df_votu_category <- df_member_sources |>
+  dplyr::filter(!is.na(metadata_sample_id)) |>
+  dplyr::distinct(vOTU_id, category = map_class(bird_category)) |>
+  dplyr::left_join(df_annotation |> dplyr::select(vOTU_id, contig_length, quality,
+    near_complete), by = "vOTU_id", relationship = "many-to-one") |>
+  dplyr::mutate(category = factor(category, levels = rev(category_levels)))
+stopifnot(all(df_votu_category$category %in% category_levels),
+  !anyNA(df_votu_category$quality))
+length_breaks <- c(0, 5, 10, 15, 20, 30, 40, 50, 100, 200, Inf) * 1000
+length_labels <- c("<5", "5–10", "10–15", "15–20", "20–30", "30–40", "40–50",
+  "50–100", "100–200", "≥200")
+df_length_bins <- df_annotation |>
+  dplyr::mutate(bin = cut(contig_length, length_breaks, labels = length_labels,
+    right = FALSE)) |>
+  dplyr::count(bin, quality, name = "vOTUs")
+df_bin_totals <- df_length_bins |> dplyr::group_by(bin) |>
+  dplyr::summarise(vOTUs = sum(vOTUs), .groups = "drop")
+stopifnot(sum(df_length_bins$vOTUs) == 61608)
+p2a <- ggplot2::ggplot(df_length_bins, ggplot2::aes(bin, vOTUs, fill = quality)) +
+  ggplot2::geom_col(width = 0.82, colour = "white", linewidth = 0.15) +
+  ggplot2::geom_text(data = df_bin_totals, ggplot2::aes(bin, vOTUs,
+    label = scales::comma(vOTUs)), inherit.aes = FALSE, vjust = -0.4, size = 1.9,
+    family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_quality, guide = "none") +
+  ggplot2::scale_y_continuous(labels = scales::comma, expand = ggplot2::expansion(c(0, 0.08))) +
+  ggplot2::labs(x = "Contig length (kb)", y = "Number of vOTUs",
+    subtitle = paste0("All ", scales::comma(nrow(df_annotation)), " vOTUs; length ",
+      scales::comma(min(df_annotation$contig_length)), "–",
+      scales::comma(max(df_annotation$contig_length)), " bp")) +
+  theme_pub() +
+  ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 6.5),
+    axis.text.x = ggplot2::element_text(angle = 35, hjust = 1))
+df_quality_pie <- df_annotation |> dplyr::count(quality, name = "vOTUs") |>
+  dplyr::mutate(percent = 100 * vOTUs / sum(vOTUs),
+    y_mid = sum(vOTUs) - (cumsum(vOTUs) - vOTUs / 2),
+    outside = percent < 15,
+    x_label = ifelse(outside, 1.68, 1.08),
+    # Slices run clockwise from 12 o'clock; outside labels extend away from the pie.
+    hjust = dplyr::case_when(!outside ~ 0.5, y_mid / sum(vOTUs) > 0.5 ~ 1, TRUE ~ 0),
+    text_colour = ifelse(!outside & quality %in% c("Complete", "High"), "white", "black"))
+p2b_pie <- ggplot2::ggplot(df_quality_pie, ggplot2::aes(x = 1, y = vOTUs, fill = quality)) +
+  ggplot2::geom_col(width = 1, colour = "white", linewidth = 0.3) +
+  ggplot2::geom_segment(data = dplyr::filter(df_quality_pie, outside),
+    ggplot2::aes(x = 1.52, xend = 1.64, y = y_mid, yend = y_mid), linewidth = 0.25,
+    inherit.aes = FALSE) +
+  ggplot2::geom_text(ggplot2::aes(x = x_label, y = y_mid, label = sprintf("%.1f%%", percent),
+    colour = text_colour, hjust = hjust), size = 2.1, family = "Arial") +
+  ggplot2::scale_colour_identity() +
+  ggplot2::scale_fill_manual(values = pal_quality, guide = "none") +
+  ggplot2::scale_x_continuous(limits = c(0.5, 1.7)) +
+  ggplot2::coord_polar(theta = "y", clip = "off") +
+  ggplot2::theme_void(base_family = "Arial")
+df_category_quality <- df_votu_category |> dplyr::count(category, quality, name = "vOTUs")
+p2b_bar <- ggplot2::ggplot(df_category_quality, ggplot2::aes(vOTUs, category, fill = quality)) +
+  ggplot2::geom_col(position = ggplot2::position_fill(reverse = TRUE), width = 0.75,
+    colour = "white", linewidth = 0.15) +
+  ggplot2::scale_x_continuous(labels = scales::percent, expand = c(0, 0),
+    breaks = c(0, 0.5, 1)) +
+  ggplot2::scale_fill_manual(values = pal_quality, name = "CheckV quality") +
+  ggplot2::labs(x = "Share of associated vOTUs", y = NULL) +
+  theme_pub() + ggplot2::theme(legend.position = "right")
+df_records <- df_map_records |>
+  dplyr::mutate(map_class = map_class(bird_category)) |>
+  dplyr::filter(map_class %in% category_levels) |>
+  dplyr::count(category = factor(map_class, levels = rev(category_levels)), name = "records")
+df_category_votus <- df_votu_category |> dplyr::count(category, name = "vOTUs")
+df_category_lengths <- df_votu_category |> dplyr::filter(near_complete)
+df_category_n <- df_category_lengths |> dplyr::count(category, name = "near_complete")
+d_base <- function(p) {
+  p + theme_pub() + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank())
+}
+label_bars <- function(df, column) {
+  inside <- df[[column]] > 0.55 * max(df[[column]])
+  list(ggplot2::geom_text(data = df, ggplot2::aes(x = .data[[column]], y = category,
+      label = scales::comma(.data[[column]])), hjust = ifelse(inside, 1.12, -0.15),
+      colour = ifelse(inside, "white", "black"), size = 1.9, family = "Arial",
+      inherit.aes = FALSE))
+}
+p2d_records <- ggplot2::ggplot(df_records, ggplot2::aes(records, category, fill = category)) +
+  ggplot2::geom_col(width = 0.72) +
+  label_bars(df_records, "records") +
+  ggplot2::scale_fill_manual(values = pal_category, guide = "none") +
+  ggplot2::scale_x_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+    expand = ggplot2::expansion(c(0, 0.08)), breaks = c(0, 1000, 2000)) +
+  ggplot2::labs(x = "Source\nrecords", y = NULL) +
+  theme_pub() + ggplot2::theme(axis.text.y = ggplot2::element_text(size = 6.5))
+p2d_votus <- d_base(ggplot2::ggplot(df_category_votus, ggplot2::aes(vOTUs, category,
+    fill = category)) +
+  ggplot2::geom_col(width = 0.72) +
+  label_bars(df_category_votus, "vOTUs") +
+  ggplot2::scale_fill_manual(values = pal_category, guide = "none") +
+  ggplot2::scale_x_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+    expand = ggplot2::expansion(c(0, 0.08)), breaks = c(0, 20000, 40000)) +
+  ggplot2::labs(x = "Associated\nvOTUs", y = NULL))
+p2d_lengths <- d_base(ggplot2::ggplot(df_category_lengths,
+    ggplot2::aes(contig_length / 1000, category, colour = category)) +
+  ggplot2::geom_jitter(height = 0.22, width = 0, size = 0.25, alpha = 0.35, stroke = 0) +
+  ggplot2::geom_boxplot(fill = NA, colour = "black", outlier.shape = NA, width = 0.55,
+    linewidth = 0.3) +
+  ggplot2::geom_text(data = df_category_n, ggplot2::aes(x = 445, y = category,
+    label = paste0("n=", scales::comma(near_complete))), inherit.aes = FALSE, hjust = 1,
+    size = 1.8, family = "Arial") +
+  ggplot2::scale_colour_manual(values = pal_category, guide = "none") +
+  ggplot2::scale_x_continuous(limits = c(0, 450), breaks = c(0, 100, 200, 300, 400),
+    expand = c(0, 0)) +
+  ggplot2::labs(x = "Near-complete\nlength (kb)", y = NULL))
+p2c <- ggplot2::ggplot(df_annotation, ggplot2::aes(contig_length / 1000, fill = quality,
+    colour = quality)) +
+  ggplot2::geom_density(alpha = 0.45, linewidth = 0.3, adjust = 1.1) +
+  ggplot2::scale_x_log10(breaks = c(3, 10, 30, 100, 300), limits = c(2.5, 500)) +
+  ggplot2::scale_fill_manual(values = pal_quality, labels = paste0(names(pal_quality),
+    " (n = ", scales::comma(as.integer(table(df_annotation$quality))), ")"),
+    name = "CheckV quality") +
+  ggplot2::scale_colour_manual(values = colorspace::darken(pal_quality, 0.25), guide = "none") +
+  ggplot2::scale_y_continuous(expand = ggplot2::expansion(c(0, 0.05))) +
+  ggplot2::labs(x = "Contig length (kb; log10 scale)", y = "Density") +
+  theme_pub() + ggplot2::theme(legend.position = c(0.8, 0.75))
+p2b <- (p2b_pie | p2b_bar) + patchwork::plot_layout(widths = c(1.45, 1.3))
+p2d <- (p2d_records | p2d_votus | p2d_lengths) + patchwork::plot_layout(widths = c(1, 0.85, 1.3))
+figure2 <- (patchwork::wrap_elements(full = p2a) | patchwork::wrap_elements(full = p2b)) /
+  (patchwork::wrap_elements(full = p2c) | patchwork::wrap_elements(full = p2d)) +
+  patchwork::plot_annotation(tag_levels = "a") &
+  ggplot2::theme(plot.tag = ggplot2::element_text(size = 10, face = "bold", family = "Arial"))
+save_pub_r(figure2, path_target("figure2-catalog-summary"), height_mm = 135)
+readr::write_tsv(dplyr::bind_rows(
+  length_bins = df_length_bins |> dplyr::mutate(bin = as.character(bin), quality = as.character(quality)),
+  category_quality = df_category_quality |> dplyr::mutate(dplyr::across(c(category, quality), as.character)),
+  category_summary = df_records |>
+    dplyr::left_join(df_category_votus, by = "category", relationship = "one-to-one") |>
+    dplyr::left_join(df_category_lengths |> dplyr::group_by(category) |>
+      dplyr::summarise(near_complete = dplyr::n(), median_length_bp = median(contig_length),
+        .groups = "drop"), by = "category", relationship = "one-to-one") |>
+    dplyr::arrange(dplyr::desc(category)) |>
+    dplyr::mutate(category = as.character(category)),
+  .id = "panel"), path_target("figure2-counts.tsv"))
+```
+
+## Figure 3: source groups, catalog VC labels and predicted lifestyles
+
+UpSet panels count vOTUs and catalog-wide VC labels by their combination of source
+groups; vOTUs without an assigned group are reported in the subtitle. Genome sizes
+in panel c use near-complete members only. Panel d shows the lifestyle labels within
+each CheckV quality tier.
+
+```{r}
+#| label: figure3-source-lifestyle
+#| cache: false
+group_sets <- c("Chicken", "Duck", "Goose", "Other birds")
+df_votu_groups <- df_member_groups |>
+  dplyr::filter(group != "Unassigned") |>
+  dplyr::mutate(present = TRUE) |>
+  tidyr::pivot_wider(names_from = group, values_from = present, values_fill = FALSE)
+unassigned_votus <- nrow(df_annotation) - nrow(df_votu_groups)
+stopifnot(unassigned_votus == 4344L, nrow(df_votu_groups) == 57264L,
+  sum(rowSums(df_votu_groups[group_sets]) == 1) == 55222L,
+  identical(as.integer(colSums(df_votu_groups[group_sets])), c(43874L, 8728L, 1387L, 5612L)))
+df_vc_groups <- df_votu_groups |>
+  dplyr::left_join(df_annotation |> dplyr::select(vOTU_id, vc_id), by = "vOTU_id",
+    relationship = "one-to-one") |>
+  dplyr::group_by(vc_id) |>
+  dplyr::summarise(dplyr::across(dplyr::all_of(group_sets), any), .groups = "drop")
+stopifnot(nrow(df_vc_groups) == 30987L,
+  sum(rowSums(df_vc_groups[group_sets]) == 1) == 26983L)
+p3a <- upset_panel(df_votu_groups, group_sets, "vOTUs")
+p3b <- upset_panel(df_vc_groups, group_sets, "VC labels")
+df_top_vcs <- df_annotation |> dplyr::count(vc_id, name = "vOTUs") |>
+  dplyr::slice_max(vOTUs, n = 10, with_ties = FALSE) |>
+  dplyr::mutate(vc_id = factor(vc_id, levels = rev(vc_id)))
+df_top_vc_lengths <- df_annotation |>
+  dplyr::filter(vc_id %in% df_top_vcs$vc_id, near_complete) |>
+  dplyr::mutate(vc_id = factor(vc_id, levels = levels(df_top_vcs$vc_id)))
+df_top_vc_groups <- df_annotation |>
+  dplyr::filter(vc_id %in% df_top_vcs$vc_id) |>
+  dplyr::select(vOTU_id, vc_id) |>
+  dplyr::left_join(df_member_groups, by = "vOTU_id",
+    relationship = "one-to-many") |>
+  dplyr::mutate(group = factor(dplyr::coalesce(group, "Unassigned"), levels = names(pal_group)),
+    vc_id = factor(vc_id, levels = levels(df_top_vcs$vc_id))) |>
+  dplyr::count(vc_id, group, name = "pairs")
+df_top_vc_n <- df_top_vc_lengths |> dplyr::count(vc_id, name = "near_complete")
+p3c_size <- ggplot2::ggplot(df_top_vcs, ggplot2::aes(vOTUs, vc_id)) +
+  ggplot2::geom_col(fill = "#00315A", width = 0.7) +
+  ggplot2::geom_text(ggplot2::aes(label = vOTUs), hjust = -0.2, size = 1.8, family = "Arial") +
+  ggplot2::scale_x_continuous(expand = ggplot2::expansion(c(0, 0.18))) +
+  ggplot2::labs(x = "vOTUs per VC label", y = NULL) + theme_pub(6.5)
+p3c_length <- ggplot2::ggplot(df_top_vc_lengths, ggplot2::aes(contig_length / 1000, vc_id)) +
+  ggplot2::geom_boxplot(outlier.shape = NA, width = 0.6, linewidth = 0.25, fill = "#DCE3EC") +
+  ggplot2::geom_jitter(height = 0.15, width = 0, size = 0.35, alpha = 0.6, colour = "#00315A") +
+  ggplot2::scale_y_discrete(drop = FALSE) +
+  ggplot2::labs(x = "Near-complete\nlength (kb)", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank(),
+    axis.line.y = ggplot2::element_blank())
+p3c_group <- ggplot2::ggplot(df_top_vc_groups, ggplot2::aes(pairs, vc_id, fill = group)) +
+  ggplot2::geom_col(position = ggplot2::position_fill(reverse = TRUE), width = 0.7,
+    colour = "white", linewidth = 0.1) +
+  ggplot2::scale_x_continuous(labels = scales::percent, breaks = c(0, 0.5, 1), expand = c(0, 0)) +
+  ggplot2::scale_fill_manual(values = pal_group, name = "Source group", drop = FALSE) +
+  ggplot2::labs(x = "Source groups", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank(),
+    axis.line.y = ggplot2::element_blank(), legend.position = "right")
+df_lifestyle_tier <- df_annotation |>
+  dplyr::mutate(lifestyle = factor(stringr::str_to_sentence(lifestyle),
+    levels = names(pal_lifestyle))) |>
+  dplyr::count(quality, lifestyle, name = "vOTUs")
+df_lifestyle_share <- df_lifestyle_tier |> dplyr::group_by(quality) |>
+  dplyr::summarise(total = sum(vOTUs), temperate = sum(vOTUs[lifestyle == "Temperate"]),
+    .groups = "drop") |>
+  dplyr::mutate(label = sprintf("%.1f%%", 100 * temperate / total))
+stopifnot(sum(df_lifestyle_tier$vOTUs) == 61608)
+p3d <- ggplot2::ggplot(df_lifestyle_tier, ggplot2::aes(quality, vOTUs, fill = lifestyle)) +
+  ggplot2::geom_col(width = 0.7) +
+  ggplot2::geom_text(data = df_lifestyle_share, ggplot2::aes(quality, total, label = label),
+    inherit.aes = FALSE, vjust = -0.4, size = 1.9, family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_lifestyle,
+    name = "Predicted lifestyle\n(labels: temperate share)") +
+  ggplot2::scale_y_continuous(labels = scales::comma, expand = ggplot2::expansion(c(0, 0.1))) +
+  ggplot2::labs(x = "CheckV quality", y = "Number of vOTUs") +
+  theme_pub(6.5) + ggplot2::theme(legend.position = c(0.38, 0.86))
+p3c <- (p3c_size | p3c_length | p3c_group) + patchwork::plot_layout(widths = c(1, 1, 1)) &
+  ggplot2::theme(plot.margin = ggplot2::margin(12, 7, 3, 3))
+figure3 <- (patchwork::wrap_elements(full = p3a) | patchwork::wrap_elements(full = p3b)) /
+  (patchwork::wrap_elements(full = p3c) | patchwork::wrap_elements(full = p3d)) +
+  patchwork::plot_layout(heights = c(1.15, 1)) +
+  patchwork::plot_annotation(tag_levels = "a") &
+  ggplot2::theme(plot.tag = ggplot2::element_text(size = 10, face = "bold", family = "Arial"))
+figure3[[2]] <- figure3[[2]] + patchwork::plot_layout(widths = c(2.2, 1))
+save_pub_r(figure3, path_target("figure3-source-lifestyle"), height_mm = 150)
+group_combinations <- function(df_groups) {
+  df_groups |> dplyr::mutate(groups = apply(dplyr::pick(dplyr::all_of(group_sets)), 1,
+      function(x) paste(group_sets[x], collapse = "+")),
+    group_count = rowSums(dplyr::pick(dplyr::all_of(group_sets)))) |>
+    dplyr::count(groups, group_count, name = "entries")
+}
+df_votu_combinations <- group_combinations(df_votu_groups)
+df_vc_combinations <- group_combinations(df_vc_groups)
+stopifnot(sum(df_votu_combinations$entries) == nrow(df_votu_groups),
+  sum(df_vc_combinations$entries) == nrow(df_vc_groups))
+readr::write_tsv(dplyr::bind_rows(
+  votu_groups = df_votu_combinations,
+  vc_groups = df_vc_combinations,
+  source_sets = tibble::tibble(group = group_sets,
+    vOTUs = as.integer(colSums(df_votu_groups[group_sets]))),
+  top_vc_groups = df_top_vc_groups |>
+    dplyr::mutate(dplyr::across(c(vc_id, group), as.character)),
+  top_vcs = df_top_vcs |> dplyr::mutate(vc_id = as.character(vc_id)),
+  lifestyle_tier = df_lifestyle_tier |> dplyr::mutate(dplyr::across(c(quality, lifestyle), as.character)),
+  .id = "panel"), path_target("figure3-counts.tsv"))
+```
+
+## Figure 4: class and family annotations
+
+In the pie-of-pie panels, the large pie shows all entries
+and the small pie expands the minor slice. Panel c traces Class → Order → Family
+for the 2,887 vOTUs with a named family. The 15 largest families retain their names;
+smaller families retain their names in orders containing one or two named families.
+Other families form an order-specific Other known families node. Placeholder and
+missing labels count as unassigned.
+
+```{r}
+#| label: figure4-taxonomy
+#| cache: false
+pal_class <- c("Caudoviricetes" = "#8AC6D1", "Malgrandaviricetes" = "#FFB6B9",
+  "Maveriviricetes" = "#007FB9", "Arfiviricetes" = "#E4694C", "Tectiliviricetes" = "#FF7F00",
+  "Faserviricetes" = "#008000", "Megaviricetes" = "#BF3922", "Repensiviricetes" = "#C0D036",
+  "Quintoviricetes" = "#9370DB", "Revtraviricetes" = "#0000FF", "Unassigned" = "#999999")
+pal_family <- c("Microviridae" = "#FFB6B9", "Peduoviridae" = "#E4694C",
+  "Drexlerviridae" = "#FF7F00", "Salasmaviridae" = "#9370DB", "Autographiviridae" = "#FFB756",
+  "Herelleviridae" = "#CE9FCA", "Rountreeviridae" = "#C0D036", "Suoliviridae" = "#007577",
+  "Schitoviridae" = "#0000FF", "Other named families" = "#008000", "Unassigned" = "#8AC6D1")
+rank_changed <- c("Microviridae", "Autographiviridae", "Lavidaviridae")
+df_tax <- df_annotation |>
+  dplyr::mutate(class = dplyr::if_else(is.na(class) | class == "unassigned", "Unassigned", class),
+    family = dplyr::if_else(is.na(family) | family == "unassigned", "Unassigned", family))
+df_class_counts <- df_tax |> dplyr::count(class, name = "vOTUs") |> dplyr::arrange(dplyr::desc(vOTUs))
+df_family_counts <- df_tax |> dplyr::count(family, class, name = "vOTUs")
+stopifnot(sum(df_class_counts$vOTUs) == 61608, all(df_class_counts$class %in% names(pal_class)),
+  sum(df_family_counts$vOTUs[df_family_counts$family == "Unassigned"]) == 58721,
+  !anyDuplicated(df_family_counts$family[df_family_counts$family != "Unassigned"]))
+# Angles follow ggforce: 0 at 12 o'clock, clockwise. The minor slice faces the zoom pie.
+pie_of_pie <- function(major, minor, pal, legend_title, minor_title) {
+  share <- sum(minor$vOTUs) / (sum(minor$vOTUs) + major$vOTUs)
+  width <- 2 * pi * share
+  big <- tibble::tibble(slice = c(major$label, "minor"),
+    start = c(1.5 * pi + width / 2, 1.5 * pi - width / 2),
+    end = c(1.5 * pi - width / 2 + 2 * pi, 1.5 * pi + width / 2),
+    fill = c(major$label, "minor"), x0 = 0, y0 = 0, r = 1)
+  minor <- minor |> dplyr::mutate(end = 2 * pi * cumsum(vOTUs) / sum(vOTUs),
+    start = dplyr::lag(end, default = 0), x0 = -2.45, y0 = 0, r = 0.78, fill = label)
+  links <- tibble::tibble(x = sin(c(1.5 * pi + width / 2, 1.5 * pi - width / 2)),
+    y = cos(c(1.5 * pi + width / 2, 1.5 * pi - width / 2)), xend = -2.45, yend = c(0.78, -0.78))
+  fills <- c(pal, minor = unname(pal[[minor_title]]))
+  legend_levels <- c(major$label, minor$label)
+  legend_labels <- paste(scales::comma(c(major$vOTUs, minor$vOTUs)), legend_levels)
+  ggplot2::ggplot() +
+    ggforce::geom_arc_bar(data = big, ggplot2::aes(x0 = x0, y0 = y0, r0 = 0, r = r,
+      start = start, end = end, fill = fill), colour = "white", linewidth = 0.2) +
+    ggforce::geom_arc_bar(data = minor, ggplot2::aes(x0 = x0, y0 = y0, r0 = 0, r = r,
+      start = start, end = end, fill = fill), colour = "white", linewidth = 0.15) +
+    ggplot2::geom_segment(data = links, ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+      linetype = "dotted", linewidth = 0.3) +
+    ggplot2::scale_fill_manual(values = fills, breaks = legend_levels, labels = legend_labels,
+      name = legend_title) +
+    ggplot2::coord_equal() + ggplot2::theme_void(base_size = 6.5, base_family = "Arial") +
+    ggplot2::theme(legend.key.size = grid::unit(2.6, "mm"),
+      legend.title = ggplot2::element_text(face = "bold", size = 6.5),
+      legend.text = ggplot2::element_text(size = 5.8))
+}
+minor_classes <- df_class_counts |> dplyr::filter(class != "Caudoviricetes") |>
+  dplyr::transmute(label = class, vOTUs)
+pal_class_pie <- c(pal_class, "Other classes" = "#FFB6B9")
+p4a <- pie_of_pie(major = tibble::tibble(label = "Caudoviricetes",
+    vOTUs = df_class_counts$vOTUs[df_class_counts$class == "Caudoviricetes"]),
+  minor = minor_classes, pal = pal_class_pie, legend_title = "Class",
+  minor_title = "Malgrandaviricetes")
+df_named <- df_family_counts |> dplyr::filter(family != "Unassigned") |>
+  dplyr::arrange(dplyr::desc(vOTUs))
+top_families <- head(df_named$family, 9)
+minor_families <- df_named |>
+  dplyr::mutate(label = ifelse(family %in% top_families, family, "Other named families")) |>
+  dplyr::group_by(label) |> dplyr::summarise(vOTUs = sum(vOTUs), .groups = "drop") |>
+  dplyr::arrange(label == "Other named families", dplyr::desc(vOTUs))
+p4b <- pie_of_pie(major = tibble::tibble(label = "Unassigned",
+    vOTUs = sum(df_family_counts$vOTUs[df_family_counts$family == "Unassigned"])),
+  minor = minor_families, pal = pal_family, legend_title = "Family",
+  minor_title = "Microviridae")
+# Family aggregation and node allocation use exact rank keys, O(n log n).
+# Every flow retains its count; spacing separates the smallest named nodes.
+top_sankey_families <- head(df_named$family, 15)
+df_sankey <- df_tax |>
+  dplyr::filter(family != "Unassigned") |>
+  dplyr::mutate(order = dplyr::if_else(is.na(order) | order == "unassigned",
+    "Order unassigned", order)) |>
+  dplyr::group_by(class, order) |>
+  dplyr::mutate(named_families_in_order = dplyr::n_distinct(family),
+    family = ifelse(family %in% top_sankey_families | named_families_in_order <= 2,
+      family, "Other known families")) |>
+  dplyr::ungroup() |>
+  dplyr::count(class, order, family, name = "vOTUs") |>
+  dplyr::mutate(class_order = match(class, c("Malgrandaviricetes", "Caudoviricetes",
+      setdiff(names(pal_class), c("Malgrandaviricetes", "Caudoviricetes")))),
+    order_unassigned = order == "Order unassigned") |>
+  dplyr::arrange(class_order, dplyr::desc(order_unassigned), order,
+    family == "Other known families", dplyr::desc(vOTUs), family) |>
+  dplyr::select(class, order, family, vOTUs) |>
+  dplyr::mutate(alluvium = dplyr::row_number(),
+    slice = ifelse(family %in% top_families, family, "Other named families"))
+stopifnot(sum(df_sankey$vOTUs) == 2887L,
+  all(top_sankey_families %in% df_sankey$family))
+df_sankey_lodes <- dplyr::bind_rows(
+  df_sankey |> dplyr::transmute(alluvium, vOTUs, slice, x = 1,
+    node = class, label = class),
+  df_sankey |> dplyr::transmute(alluvium, vOTUs, slice, x = 2,
+    node = paste(class, order, sep = "::"), label = order),
+  df_sankey |> dplyr::transmute(alluvium, vOTUs, slice, x = 3,
+    node = paste(class, order, family, sep = "::"),
+    label = ifelse(family %in% rank_changed, paste0(family, "†"), family)))
+df_sankey_nodes <- df_sankey_lodes |>
+  dplyr::group_by(x, node) |>
+  dplyr::summarise(label = dplyr::first(label), vOTUs = sum(vOTUs),
+    node_order = min(alluvium), slice = dplyr::first(slice), .groups = "drop") |>
+  dplyr::arrange(x, node_order)
+sankey_padding <- 85 * (sum(df_sankey_nodes$x == 3) - 1)
+sankey_height <- 2887 + sankey_padding
+df_sankey_nodes <- df_sankey_nodes |>
+  dplyr::group_by(x) |>
+  dplyr::mutate(ymin = sankey_height - cumsum(vOTUs) -
+      (dplyr::row_number() - 1) * sankey_padding / (dplyr::n() - 1),
+    ymax = ymin + vOTUs, y = (ymin + ymax) / 2,
+    label = paste0(label, " (", scales::comma(vOTUs), ")"),
+    fill = ifelse(x == 3, unname(pal_family[slice]), "#BFC7CB")) |>
+  dplyr::ungroup()
+df_sankey_lodes <- df_sankey_lodes |>
+  dplyr::left_join(df_sankey_nodes |> dplyr::select(x, node, node_top = ymax),
+    by = c("x", "node"), relationship = "many-to-one") |>
+  dplyr::group_by(x, node) |>
+  dplyr::arrange(alluvium, .by_group = TRUE) |>
+  dplyr::mutate(ymin = node_top - cumsum(vOTUs), ymax = ymin + vOTUs,
+    y = (ymin + ymax) / 2) |>
+  dplyr::ungroup()
+stopifnot(all(abs(df_sankey_lodes$ymax - df_sankey_lodes$ymin -
+  df_sankey_lodes$vOTUs) < 1e-8))
+p4c <- ggplot2::ggplot(df_sankey_lodes,
+    ggplot2::aes(x = x, y = y, ymin = ymin, ymax = ymax, alluvium = alluvium)) +
+  ggalluvial::geom_flow(ggplot2::aes(fill = slice), stat = "identity", width = 0.045,
+    alpha = 0.65, colour = "transparent", curve_type = "cubic") +
+  ggplot2::scale_fill_manual(values = pal_family, guide = "none") +
+  ggplot2::geom_rect(data = df_sankey_nodes,
+    ggplot2::aes(xmin = x - 0.0225, xmax = x + 0.0225, ymin = ymin, ymax = ymax),
+    fill = df_sankey_nodes$fill, colour = "grey45", linewidth = 0.15,
+    inherit.aes = FALSE) +
+  ggplot2::geom_text(data = dplyr::filter(df_sankey_nodes, x == 1),
+    ggplot2::aes(x = x - 0.065, y = y, label = label), hjust = 1,
+    size = 1.9, family = "Arial", inherit.aes = FALSE) +
+  ggplot2::geom_text(data = dplyr::filter(df_sankey_nodes, x == 3),
+    ggplot2::aes(x = x + 0.065, y = y, label = label), hjust = 0,
+    size = 1.9, family = "Arial", inherit.aes = FALSE) +
+  ggplot2::geom_label(data = dplyr::filter(df_sankey_nodes, x == 2),
+    ggplot2::aes(x = x, y = y, label = label), fill = "white", linewidth = 0,
+    label.padding = grid::unit(1.4, "pt"), label.r = grid::unit(0, "pt"),
+    size = 1.9, family = "Arial", inherit.aes = FALSE) +
+  ggplot2::scale_x_continuous(breaks = 1:3, labels = c("Class", "Order", "Family"),
+    limits = c(-0.20, 4.50), position = "top", expand = c(0, 0)) +
+  ggplot2::scale_y_continuous(expand = ggplot2::expansion(c(0.015, 0.015))) +
+  ggplot2::labs(title = "2,887 entries with a named family",
+    caption = "† Promoted to a higher rank under a different name in ICTV MSL41") +
+  ggplot2::theme_void(base_family = "Arial") +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(size = 6.5, face = "bold"),
+    plot.title = ggplot2::element_text(size = 6.8, hjust = 0.5),
+    plot.caption = ggplot2::element_text(size = 5.6, hjust = 0),
+    plot.margin = ggplot2::margin(5.5, 0, 5.5, 0))
+figure4 <- (patchwork::wrap_elements(full = p4a) / patchwork::wrap_elements(full = p4b) |
+    patchwork::wrap_elements(full = p4c)) +
+  patchwork::plot_layout(widths = c(102, 130)) +
+  patchwork::plot_annotation(tag_levels = "a") &
+  ggplot2::theme(plot.tag = ggplot2::element_text(size = 10, face = "bold", family = "Arial"))
+save_pub_r(figure4, path_target("figure4-taxonomy"), width_mm = 232, height_mm = 140)
+readr::write_tsv(dplyr::bind_rows(
+  df_class_counts |> dplyr::rename(taxon = class) |>
+    dplyr::mutate(rank = "class", panel = "class"),
+  df_family_counts |> dplyr::rename(taxon = family) |> dplyr::select(-class) |>
+    dplyr::mutate(rank = "family", panel = "family"),
+  df_sankey |> dplyr::select(class, order, family, vOTUs) |>
+    dplyr::mutate(panel = "sankey_class_order_family")) |>
+  dplyr::select(rank, taxon, vOTUs, panel, class, order, family),
+  path_target("figure4-counts.tsv"))
+```
+
+## Figure 5: host predictions for near-complete representatives
+
+All panels use the 12,939 representatives with completeness >90% and contamination
+≤5%. Host predictions are iPHoP assignments with confidence ≥90. GC content comes
+from the step 55 table, which step 100 checked against the released sequences.
+
+```{r}
+#| label: figure5-hosts
+#| cache: false
+con_hosts <- DBI::dbConnect(RSQLite::SQLite(), here::here("pc028e3.sqlite"),
+  flags = RSQLite::SQLITE_RO)
+df_hosts <- DBI::dbReadTable(con_hosts, "host_filtered") |>
+  tidyr::separate(Host.taxonomy, into = c("Domain", "Phylum", "Class", "Order", "Family",
+    "Genus", "Species"), sep = ";", fill = "right") |>
+  dplyr::mutate(dplyr::across(Domain:Species,
+    ~ dplyr::na_if(stringr::str_remove(.x, "^[a-z]__"), "")))
+DBI::dbDisconnect(con_hosts)
+df_gc <- readr::read_tsv(here::here(path_raw, "d55-fig5", "gc.tsv"),
+  col_names = c("contig_repid", "gc_percent"), show_col_types = FALSE)
+df_nc <- df_annotation |> dplyr::filter(near_complete) |>
+  dplyr::select(vOTU_id, contig_repid, contig_length, lifestyle, class) |>
+  dplyr::left_join(df_gc, by = "contig_repid", relationship = "one-to-one")
+stopifnot(nrow(df_nc) == 12939, !anyNA(df_nc$gc_percent))
+df_host_pairs <- df_nc |>
+  dplyr::inner_join(df_hosts |> dplyr::distinct(contig_id, Phylum, Genus),
+    by = c(contig_repid = "contig_id"), relationship = "one-to-many")
+df_phylum_pairs <- df_host_pairs |> dplyr::filter(!is.na(Phylum)) |> dplyr::distinct(vOTU_id, Phylum)
+df_genus_pairs <- df_host_pairs |> dplyr::filter(!is.na(Genus)) |> dplyr::distinct(vOTU_id, Genus)
+df_genus_n <- df_genus_pairs |> dplyr::count(vOTU_id, name = "predicted_genera")
+stopifnot(dplyr::n_distinct(df_host_pairs$vOTU_id) == 8853, nrow(df_genus_n) == 8852,
+  dplyr::n_distinct(df_phylum_pairs$Phylum) == 29)
+shown_phyla <- setdiff(names(pal_phylum), c("Other phyla", "Multiple predicted phyla",
+  "Phylum unassigned"))
+df_nc <- df_nc |>
+  dplyr::left_join(df_phylum_pairs |> dplyr::group_by(vOTU_id) |>
+    dplyr::summarise(phylum_label = if (dplyr::n() == 1) Phylum[[1]] else
+      "Multiple predicted phyla", .groups = "drop"), by = "vOTU_id") |>
+  dplyr::mutate(phylum_label = dplyr::case_when(is.na(phylum_label) ~ "Phylum unassigned",
+      phylum_label %in% c(shown_phyla, "Multiple predicted phyla") ~ phylum_label,
+      TRUE ~ "Other phyla"),
+    phylum_label = factor(phylum_label, levels = names(pal_phylum)))
+p5a_main <- ggplot2::ggplot(dplyr::arrange(df_nc, phylum_label == "Phylum unassigned") |>
+    dplyr::arrange(dplyr::desc(phylum_label == "Phylum unassigned")),
+    ggplot2::aes(contig_length / 1000, gc_percent, colour = phylum_label)) +
+  ggplot2::geom_point(size = 0.35, alpha = 0.6, stroke = 0) +
+  ggplot2::scale_x_log10(breaks = c(3, 10, 30, 100, 300)) +
+  ggplot2::scale_colour_manual(values = pal_phylum, name = "Predicted host phylum",
+    drop = FALSE) +
+  ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 1.8, alpha = 1),
+    ncol = 1)) +
+  ggplot2::labs(x = "Contig length (kb; log10 scale)", y = "GC content (%)") +
+  theme_pub(6.5) + ggplot2::theme(legend.position = "right")
+p5a_top <- ggplot2::ggplot(df_nc, ggplot2::aes(contig_length / 1000, fill = phylum_label)) +
+  ggplot2::geom_histogram(bins = 60, linewidth = 0) +
+  ggplot2::scale_x_log10(breaks = c(3, 10, 30, 100, 300)) +
+  ggplot2::scale_fill_manual(values = pal_phylum, guide = "none") +
+  ggplot2::scale_y_continuous(expand = c(0, 0)) +
+  ggplot2::theme_void()
+p5a_right <- ggplot2::ggplot(df_nc, ggplot2::aes(y = gc_percent, fill = phylum_label)) +
+  ggplot2::geom_histogram(bins = 45, linewidth = 0) +
+  ggplot2::scale_fill_manual(values = pal_phylum, guide = "none") +
+  ggplot2::scale_x_continuous(expand = c(0, 0)) +
+  ggplot2::theme_void()
+p5a <- p5a_top + patchwork::plot_spacer() + p5a_main + p5a_right +
+  patchwork::plot_layout(ncol = 2, widths = c(4, 0.7), heights = c(0.7, 4), guides = "collect")
+df_phylum_bars <- df_phylum_pairs |>
+  dplyr::count(Phylum, name = "vOTUs") |>
+  dplyr::mutate(Phylum = ifelse(vOTUs < 100, "Other phyla", Phylum)) |>
+  dplyr::group_by(Phylum) |> dplyr::summarise(vOTUs = sum(vOTUs), .groups = "drop") |>
+  dplyr::bind_rows(tibble::tibble(Phylum = "Host unknown",
+    vOTUs = sum(df_nc$phylum_label == "Phylum unassigned"))) |>
+  dplyr::mutate(Phylum = factor(Phylum, levels = rev(c("Host unknown",
+    setdiff(Phylum[order(-vOTUs)], c("Host unknown", "Other phyla")), "Other phyla"))))
+pal_phylum_bars <- c(pal_phylum, "Host unknown" = "#C8C8C8",
+  "Desulfobacterota" = "#9AA5B1", "Cyanobacteriota" = "#9AA5B1")
+p5b <- ggplot2::ggplot(df_phylum_bars, ggplot2::aes(vOTUs, Phylum, fill = Phylum)) +
+  ggplot2::geom_col(width = 0.72) +
+  ggplot2::geom_text(ggplot2::aes(label = scales::comma(vOTUs)), hjust = -0.15, size = 1.8,
+    family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_phylum_bars, guide = "none") +
+  ggplot2::scale_x_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+    expand = ggplot2::expansion(c(0, 0.3))) +
+  ggplot2::labs(x = "vOTUs per predicted phylum", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(plot.margin = ggplot2::margin(12, 4, 4, 4))
+df_genus_hist <- df_genus_n |> dplyr::count(predicted_genera, name = "vOTUs") |>
+  dplyr::mutate(type = ifelse(predicted_genera == 1, "Single genus", "Multiple genera"))
+pal_multiplicity <- c("Single genus" = "#5A6FC0", "Multiple genera" = "#9BC46B")
+p5c <- ggplot2::ggplot(df_genus_hist, ggplot2::aes(factor(predicted_genera), vOTUs, fill = type)) +
+  ggplot2::geom_col(width = 0.75) +
+  ggplot2::geom_text(ggplot2::aes(label = scales::comma(vOTUs)), vjust = -0.35, size = 1.7,
+    family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_multiplicity, name = NULL) +
+  ggplot2::scale_y_continuous(labels = scales::comma, expand = ggplot2::expansion(c(0, 0.12))) +
+  ggplot2::scale_x_discrete(expand = ggplot2::expansion(add = c(0.9, 0.4))) +
+  ggplot2::labs(x = "Predicted host genera per vOTU", y = "Number of vOTUs") +
+  theme_pub(6.5) + ggplot2::theme(legend.position = c(0.7, 0.75))
+genus_phylum <- df_host_pairs |> dplyr::filter(!is.na(Genus)) |>
+  dplyr::distinct(Genus, Phylum) |> dplyr::group_by(Genus) |>
+  dplyr::summarise(Phylum = Phylum[[1]], .groups = "drop")
+df_genus_votus <- df_genus_pairs |>
+  dplyr::left_join(df_nc |> dplyr::select(vOTU_id, contig_length, lifestyle, class),
+    by = "vOTU_id") |>
+  dplyr::left_join(df_genus_n, by = "vOTU_id")
+top_genera <- df_genus_votus |> dplyr::count(Genus, name = "vOTUs") |>
+  dplyr::filter(vOTUs >= 60) |> dplyr::arrange(dplyr::desc(vOTUs))
+stopifnot(nrow(top_genera) == 40)
+df_top_genus <- df_genus_votus |> dplyr::filter(Genus %in% top_genera$Genus) |>
+  dplyr::left_join(genus_phylum, by = "Genus") |>
+  dplyr::mutate(Genus = factor(Genus, levels = rev(top_genera$Genus)),
+    phylum_fill = ifelse(Phylum %in% shown_phyla, Phylum, "Other phyla"))
+genus_y <- function(p, show = FALSE) {
+  p + theme_pub(6) + ggplot2::theme(axis.text.y = if (show)
+      ggplot2::element_text(size = 5.4, face = "italic") else ggplot2::element_blank(),
+    axis.ticks.y = if (show) ggplot2::element_line(linewidth = 0.3) else ggplot2::element_blank(),
+    axis.line.y = if (show) ggplot2::element_line(linewidth = 0.3) else ggplot2::element_blank(),
+    axis.text.x = ggplot2::element_text(size = 5.3))
+}
+p5d_count <- genus_y(ggplot2::ggplot(df_top_genus |> dplyr::count(Genus, phylum_fill, name = "vOTUs"),
+    ggplot2::aes(vOTUs, Genus, fill = phylum_fill)) +
+  ggplot2::geom_col(width = 0.75) +
+  ggplot2::scale_fill_manual(values = pal_phylum, guide = "none") +
+  ggplot2::scale_x_continuous(expand = ggplot2::expansion(c(0, 0.05)), breaks = c(0, 300, 600)) +
+  ggplot2::labs(x = "vOTUs", y = NULL), show = TRUE)
+p5d_length <- genus_y(ggplot2::ggplot(df_top_genus, ggplot2::aes(contig_length / 1000, Genus,
+    fill = phylum_fill)) +
+  ggplot2::geom_boxplot(outlier.size = 0.2, outlier.stroke = 0, width = 0.65, linewidth = 0.2) +
+  ggplot2::scale_fill_manual(values = pal_phylum, guide = "none") +
+  ggplot2::scale_x_log10(breaks = c(10, 100)) +
+  ggplot2::labs(x = "Length (kb)", y = NULL))
+stack_share <- function(df, column, pal, title) {
+  genus_y(ggplot2::ggplot(df |> dplyr::count(Genus, value = .data[[column]], name = "n"),
+      ggplot2::aes(n, Genus, fill = value)) +
+    ggplot2::geom_col(position = ggplot2::position_fill(reverse = TRUE), width = 0.75) +
+    ggplot2::scale_x_continuous(labels = c("0", "50", "100"), breaks = c(0, 0.5, 1),
+      expand = c(0, 0)) +
+    ggplot2::scale_fill_manual(values = pal, name = title) +
+    ggplot2::labs(x = paste0(title, "\n(%)"), y = NULL))
+}
+df_top_genus <- df_top_genus |>
+  dplyr::mutate(class_label = dplyr::case_when(class == "Caudoviricetes" ~ "Caudoviricetes",
+      is.na(class) | class == "unassigned" ~ "Unassigned", TRUE ~ "Other classes"),
+    lifestyle_label = factor(stringr::str_to_sentence(lifestyle), levels = names(pal_lifestyle)),
+    multiplicity = factor(ifelse(predicted_genera == 1, "Single genus", "Multiple genera"),
+      levels = names(pal_multiplicity)))
+p5d_class <- stack_share(df_top_genus, "class_label", c("Caudoviricetes" = "#8AC6D1",
+  "Other classes" = "#FFB6B9", "Unassigned" = "#999999"), "Class")
+p5d_life <- stack_share(df_top_genus, "lifestyle_label", pal_lifestyle, "Lifestyle")
+p5d_mult <- stack_share(df_top_genus, "multiplicity", pal_multiplicity, "Genera")
+p5d <- (p5d_count | p5d_length | p5d_class | p5d_life | p5d_mult) +
+  patchwork::plot_layout(widths = c(1.15, 0.9, 0.7, 0.7, 0.7), guides = "collect") &
+  ggplot2::theme(legend.position = "bottom", legend.direction = "vertical",
+    legend.title = ggplot2::element_text(size = 6, face = "bold"),
+    legend.text = ggplot2::element_text(size = 5.5),
+    plot.margin = ggplot2::margin(2, 6, 2, 2))
+left_col <- panel_tag(p5a, "a") / (panel_tag(p5b, "b") | panel_tag(p5c, "c")) +
+  patchwork::plot_layout(heights = c(1.35, 1))
+figure5 <- (left_col | panel_tag(p5d, "d")) + patchwork::plot_layout(widths = c(1.15, 1))
+save_pub_r(figure5, path_target("figure5-host-summary"), height_mm = 175)
+readr::write_tsv(dplyr::bind_rows(
+  phylum = df_phylum_bars |> dplyr::transmute(item = as.character(Phylum), vOTUs),
+  genus_multiplicity = df_genus_hist |> dplyr::transmute(item = as.character(predicted_genera), vOTUs),
+  top_genera = top_genera |> dplyr::transmute(item = Genus, vOTUs), .id = "panel"),
+  path_target("figure5-counts.tsv"))
+```
+
+## Figure 7: DRAM-v functional annotations
+
+Counts use DRAM-v records of the near-complete and other catalog representatives, as
+in Table S9. Panel a counts protein–category assignments; panels b and c count
+distinct proteins. Source groups in panel c count vOTU–group pairs of the vOTUs that
+carry each module annotation.
+
+```{r}
+#| label: figure7-functions
+#| cache: false
+con_function <- DBI::dbConnect(RSQLite::SQLite(), here::here("pc028e3.sqlite"),
+  flags = RSQLite::SQLITE_RO)
+df_dramv <- DBI::dbReadTable(con_function, "amg_dramv_filtered")
+DBI::dbDisconnect(con_function)
+df_function <- df_dramv |>
+  dplyr::select(contig_id, protein_id, dbid, module, sheet, header) |>
+  dplyr::distinct() |>
+  dplyr::inner_join(df_annotation |> dplyr::select(contig_repid, vOTU_id),
+    by = c(contig_id = "contig_repid"), relationship = "many-to-one") |>
+  dplyr::mutate(dplyr::across(c(module, sheet, header), ~ dplyr::coalesce(trimws(.x), "")),
+    sheet = dplyr::case_when(
+      sheet %in% c("carbon utilization", "carbon utilization (Woodcroft)") ~ "Carbon utilization",
+      sheet == "" ~ "Unclassified", TRUE ~ sheet),
+    header = ifelse(header == "", "Unclassified", header),
+    module = ifelse(module == "", "Unclassified", module))
+capitalize_first <- function(x) paste0(toupper(substr(x, 1, 1)), substring(x, 2))
+# KEGG M00053 is stored without its module name in the archived DRAM-v output.
+df_function <- df_function |>
+  dplyr::mutate(module = dplyr::recode(module, "M00053" = paste("Deoxyribonucleotide",
+      "biosynthesis, ADP/GDP/CDP/UDP => dATP/dGTP/dCTP/dUTP (M00053)")),
+    module = capitalize_first(module), header = capitalize_first(header))
+stopifnot(dplyr::n_distinct(df_function$protein_id) == 10095,
+  dplyr::n_distinct(df_function$vOTU_id) == 7257, all(df_function$sheet %in% names(pal_function)))
+df_broad <- df_function |> dplyr::group_by(sheet) |>
+  dplyr::summarise(proteins = dplyr::n_distinct(protein_id), .groups = "drop") |>
+  dplyr::mutate(percent = 100 * proteins / sum(proteins)) |>
+  dplyr::arrange(dplyr::desc(proteins)) |>
+  dplyr::mutate(sheet = factor(sheet, levels = sheet),
+    y_mid = sum(proteins) - (cumsum(proteins) - proteins / 2),
+    x_label = 1.05)
+stopifnot(sum(df_broad$proteins) == 10691)
+p7a <- ggplot2::ggplot(df_broad, ggplot2::aes(x = 1, y = proteins, fill = sheet)) +
+  ggplot2::geom_col(width = 1, colour = "white", linewidth = 0.3) +
+  ggplot2::geom_text(data = dplyr::filter(df_broad, percent >= 5),
+    ggplot2::aes(x = x_label, y = y_mid, label = sprintf("%.1f%%", percent)),
+    size = 2.1, family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_function, name = "Broad category",
+    labels = stats::setNames(sprintf("%s (%.1f%%)", df_broad$sheet, df_broad$percent),
+      as.character(df_broad$sheet))) +
+  ggplot2::scale_x_continuous(limits = c(0.5, 1.6)) +
+  ggplot2::coord_polar(theta = "y") +
+  ggplot2::labs(title = paste0(scales::comma(sum(df_broad$proteins)),
+    " protein–category assignments")) +
+  ggplot2::theme_void(base_size = 6.5, base_family = "Arial") +
+  ggplot2::theme(plot.title = ggplot2::element_text(size = 6.8, hjust = 0.5),
+    legend.key.size = grid::unit(2.6, "mm"),
+    legend.title = ggplot2::element_text(face = "bold", size = 6.5))
+df_sub <- df_function |> dplyr::group_by(header) |>
+  dplyr::summarise(proteins = dplyr::n_distinct(protein_id),
+    sheet = names(sort(table(sheet), decreasing = TRUE))[[1]], .groups = "drop") |>
+  dplyr::arrange(proteins) |>
+  dplyr::mutate(header = factor(header, levels = header))
+p7b <- ggplot2::ggplot(df_sub, ggplot2::aes(proteins, header, fill = sheet)) +
+  ggplot2::geom_col(width = 0.72) +
+  ggplot2::geom_text(ggplot2::aes(label = scales::comma(proteins)), hjust = -0.15, size = 1.8,
+    family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_function, guide = "none") +
+  ggplot2::scale_x_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+    expand = ggplot2::expansion(c(0, 0.18))) +
+  ggplot2::labs(x = "Distinct proteins", y = NULL, title = "Annotation subcategories") +
+  theme_pub(6.5) + ggplot2::theme(plot.title = ggplot2::element_text(size = 6.8))
+df_modules <- df_function |> dplyr::filter(module != "Unclassified") |>
+  dplyr::group_by(module) |>
+  dplyr::summarise(proteins = dplyr::n_distinct(protein_id),
+    sheet = names(sort(table(sheet), decreasing = TRUE))[[1]], .groups = "drop") |>
+  dplyr::slice_max(proteins, n = 25, with_ties = FALSE) |>
+  dplyr::mutate(label = stringr::str_wrap(module, 52),
+    label = factor(label, levels = rev(label)))
+df_module_groups <- df_function |>
+  dplyr::filter(module %in% df_modules$module) |>
+  dplyr::distinct(module, vOTU_id) |>
+  dplyr::left_join(df_member_groups, by = "vOTU_id",
+    relationship = "many-to-many") |>
+  dplyr::mutate(group = factor(dplyr::coalesce(group, "Unassigned"), levels = names(pal_group))) |>
+  dplyr::count(module, group, name = "pairs") |>
+  dplyr::left_join(df_modules |> dplyr::select(module, label), by = "module")
+p7c_lolli <- ggplot2::ggplot(df_modules, ggplot2::aes(proteins, label, colour = sheet)) +
+  ggplot2::geom_segment(ggplot2::aes(x = 1, xend = proteins, yend = label), linewidth = 0.6) +
+  ggplot2::geom_point(size = 1.6) +
+  ggplot2::geom_text(ggplot2::aes(label = scales::comma(proteins)), hjust = -0.35, size = 1.75,
+    family = "Arial", colour = "black") +
+  ggplot2::scale_colour_manual(values = pal_function, guide = "none") +
+  ggplot2::scale_x_log10(labels = scales::comma, expand = ggplot2::expansion(c(0, 0.12))) +
+  ggplot2::labs(x = "Distinct proteins (log10 scale)", y = NULL,
+    title = "Most frequent module annotations") +
+  theme_pub(6.5) + ggplot2::theme(axis.text.y = ggplot2::element_text(size = 5.6),
+    plot.title = ggplot2::element_text(size = 6.8))
+p7c_group <- ggplot2::ggplot(df_module_groups, ggplot2::aes(pairs, label, fill = group)) +
+  ggplot2::geom_col(position = ggplot2::position_fill(reverse = TRUE), width = 0.72) +
+  ggplot2::scale_x_continuous(labels = c("0", "50", "100"), breaks = c(0, 0.5, 1),
+    expand = c(0, 0)) +
+  ggplot2::scale_fill_manual(values = pal_group, name = "Source group") +
+  ggplot2::labs(x = "Source groups (%)", y = NULL) +
+  theme_pub(6.5) + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank())
+p7c <- (p7c_lolli | p7c_group) + patchwork::plot_layout(widths = c(3, 1))
+figure7 <- ((panel_tag(p7a, "a") | panel_tag(p7b, "b")) + patchwork::plot_layout(widths = c(1, 1.15))) /
+  panel_tag(p7c, "c") + patchwork::plot_layout(heights = c(0.85, 1.25))
+save_pub_r(figure7, path_target("figure7-annotation-summary"), height_mm = 185)
+readr::write_tsv(dplyr::bind_rows(
+  broad = df_broad |> dplyr::transmute(item = as.character(sheet), proteins),
+  subcategory = df_sub |> dplyr::transmute(item = as.character(header), proteins),
+  module = df_modules |> dplyr::transmute(item = module, proteins),
+  module_source_groups = df_module_groups |>
+    dplyr::transmute(item = module, group = as.character(group), pairs), .id = "level"),
+  path_target("figure7-counts.tsv"))
+```
+
+## Figure 6: archived gene-content dendrogram and network modules
+
+Panel a shows the stored vConTACT3 *Duplodnaviria* dendrogram with all 17,260 tips,
+its topology and branch lengths. Three rings annotate each tip: its sequence set, the
+membership of its stored Infomap module and its genome size recorded by vConTACT3.
+Consecutive tips with equal values are drawn as one ring segment. Panel b counts the
+modules and sequences of the full 17,734-node network by module membership.
+The outer VCX mark identifies archived module 44. Panel c shows the 274 predicted
+vOTU–host-order associations for its 255 host-assigned vOTUs; Table S15 retains all
+266 module members. Node size counts exact-match bird source groups across members.
+
+```{r}
+#| label: figure6-network
+#| cache: false
+path_network <- path_source("00-raw", "d12-vc3_hq")
+tree_archived <- ape::read.tree(file.path(path_network, "trees", "Duplodnaviria",
+  "Duplodnaviria_1_tree.nw"))
+df_tree_tips <- readr::read_tsv(file.path(path_revision, "figure6-tree-tips.tsv"),
+  show_col_types = FALSE, guess_max = 20000)
+df_network_nodes <- readr::read_tsv(file.path(path_revision, "figure6-network-nodes.tsv"),
+  show_col_types = FALSE, guess_max = 20000)
+df_module_counts <- readr::read_tsv(file.path(path_revision, "figure6-network-modules.tsv"),
+  show_col_types = FALSE)
+df_genome_sizes <- readr::read_csv(file.path(path_network, "final_assignments.csv"),
+  col_types = readr::cols(.default = readr::col_character())) |>
+  dplyr::transmute(tree_label = ifelse(Reference == "True", RefSeqID, GenomeName),
+    size_kb = as.numeric(`Size (Kb)`))
+stopifnot(nrow(df_tree_tips) == 17260, setequal(df_tree_tips$tree_label, tree_archived$tip.label),
+  nrow(df_network_nodes) == 17734, nrow(df_module_counts) == 220,
+  !anyDuplicated(df_genome_sizes$tree_label))
+pal_set <- c("Catalog" = "#D55E00", "Reference" = "#0072B2")
+pal_module <- c("Mixed" = "#D9D9D9", "Catalog only" = "#D55E00", "Reference only" = "#0072B2")
+module_labels <- c("Mixed" = "Catalog + reference", "Catalog only" = "Catalog only",
+  "Reference only" = "Reference only")
+length_bins <- c("<20", "20–40", "40–60", "60–100", "100–200", "≥200")
+pal_length <- stats::setNames(c("#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#3F007D"),
+  length_bins)
+p_fan <- ggtree::ggtree(tree_archived, layout = "fan", open.angle = 180, colour = "#5A5A5A",
+  linewidth = 0.025)
+fan_turn <- max(p_fan$scales$get_scales("y")$limits)
+tip_depth <- max(p_fan$data$x)
+df_tip_rings <- p_fan$data |> dplyr::filter(isTip) |> dplyr::select(tree_label = label, y) |>
+  dplyr::left_join(df_tree_tips |> dplyr::select(tree_label, sequence_set, module_id),
+    by = "tree_label", relationship = "one-to-one") |>
+  dplyr::left_join(df_module_counts |> dplyr::select(module_id, composition),
+    by = "module_id", relationship = "many-to-one") |>
+  dplyr::left_join(df_genome_sizes, by = "tree_label", relationship = "one-to-one") |>
+  dplyr::mutate(length_bin = cut(size_kb, c(0, 20, 40, 60, 100, 200, Inf), right = FALSE,
+    labels = length_bins))
+stopifnot(!anyNA(df_tip_rings$sequence_set), !anyNA(df_tip_rings$composition),
+  !anyNA(df_tip_rings$length_bin), sum(df_tip_rings$sequence_set == "Catalog") == 12287)
+ring_segments <- function(df_rings, column) {
+  df_rings |> dplyr::arrange(y) |>
+    dplyr::mutate(value = .data[[column]],
+      segment = cumsum(dplyr::row_number() == 1 | value != dplyr::lag(value))) |>
+    dplyr::group_by(segment, value) |>
+    dplyr::summarise(ymin = min(y) - 0.5, ymax = max(y) + 0.5, .groups = "drop")
+}
+ring_width <- tip_depth * 0.05
+ring_start <- tip_depth * 1.025 + (0:2) * tip_depth * 0.062
+ring_layer <- function(column, i) {
+  ggplot2::geom_rect(data = ring_segments(df_tip_rings, column),
+    ggplot2::aes(xmin = ring_start[i], xmax = ring_start[i] + ring_width, ymin = ymin,
+      ymax = ymax, fill = value), inherit.aes = FALSE)
+}
+df_ring_numbers <- tidyr::crossing(
+  tibble::tibble(x = ring_start + ring_width / 2, label = c("1", "2", "3")),
+  y = c(nrow(df_tip_rings) + fan_turn * 0.006, fan_turn * 0.994))
+df_vcx_tip_arcs <- df_tip_rings |> dplyr::arrange(y) |>
+  dplyr::mutate(is_vcx = module_id == 44,
+    segment = cumsum(dplyr::row_number() == 1 | is_vcx != dplyr::lag(is_vcx))) |>
+  dplyr::filter(is_vcx) |> dplyr::group_by(segment) |>
+  dplyr::summarise(ymin = min(y) - 0.5, ymax = max(y) + 0.5, .groups = "drop")
+stopifnot(sum(df_vcx_tip_arcs$ymax - df_vcx_tip_arcs$ymin) == 266)
+df_vcx_tip_label <- df_vcx_tip_arcs |> dplyr::slice_max(ymax - ymin, n = 1, with_ties = FALSE) |>
+  dplyr::transmute(x = ring_start[3] + ring_width + tip_depth * 0.085,
+    y = (ymin + ymax) / 2, label = "VCX")
+p6a_fan <- p_fan +
+  ring_layer("sequence_set", 1) + ggplot2::scale_fill_manual(values = pal_set) +
+  ggnewscale::new_scale_fill() +
+  ring_layer("composition", 2) + ggplot2::scale_fill_manual(values = pal_module) +
+  ggnewscale::new_scale_fill() +
+  ring_layer("length_bin", 3) + ggplot2::scale_fill_manual(values = pal_length) +
+  ggplot2::geom_text(data = df_ring_numbers, ggplot2::aes(x, y, label = label),
+    inherit.aes = FALSE, size = 2.3, fontface = "bold", family = "Arial") +
+  ggplot2::geom_rect(data = df_vcx_tip_arcs,
+    ggplot2::aes(ymin = ymin, ymax = ymax),
+    xmin = ring_start[3] + ring_width + tip_depth * 0.018,
+    xmax = ring_start[3] + ring_width + tip_depth * 0.035,
+    fill = "#0072B2", inherit.aes = FALSE) +
+  ggplot2::geom_text(data = df_vcx_tip_label, ggplot2::aes(x, y, label = label),
+    size = 2.6, fontface = "bold", colour = "#0072B2", family = "Arial", inherit.aes = FALSE) +
+  ggplot2::theme(legend.position = "none", plot.margin = ggplot2::margin(0, 0, 0, 0))
+legend_only <- function(rings, corner) {
+  p <- ggplot2::ggplot()
+  for (i in seq_along(rings)) {
+    if (i > 1) p <- p + ggnewscale::new_scale_fill()
+    df_keys <- tibble::tibble(key = factor(names(rings[[i]]$values),
+      levels = names(rings[[i]]$values)))
+    p <- p + ggplot2::geom_tile(data = df_keys, ggplot2::aes(x = 0, y = 0, fill = key), alpha = 0) +
+      ggplot2::scale_fill_manual(values = rings[[i]]$values, labels = rings[[i]]$labels,
+        name = rings[[i]]$title, guide = ggplot2::guide_legend(order = i,
+          override.aes = list(alpha = 1)))
+  }
+  p + ggplot2::theme_void(base_family = "Arial") +
+    ggplot2::theme(legend.position = "inside", legend.position.inside = corner,
+      legend.justification = corner, legend.box.just = "left",
+      legend.title = ggplot2::element_text(size = 6.5, face = "bold"),
+      legend.text = ggplot2::element_text(size = 6), legend.key.size = grid::unit(2.6, "mm"),
+      legend.spacing.y = grid::unit(2.2, "mm"))
+}
+legend_left <- legend_only(list(
+  list(values = pal_set, labels = names(pal_set), title = "1  Sequence set"),
+  list(values = pal_module, labels = module_labels, title = "2  Network module")), c(0, 1))
+legend_right <- legend_only(list(
+  list(values = pal_length, labels = length_bins, title = "3  Genome length (kb)")), c(1, 1))
+fan_height_mm <- 96
+fan_scale <- 1.18
+fan_size <- 183 * fan_scale / fan_height_mm
+p6a <- cowplot::ggdraw() +
+  cowplot::draw_plot(p6a_fan, x = (1 - fan_scale) / 2, y = 0.06 - fan_size / 2,
+    width = fan_scale, height = fan_size) +
+  cowplot::draw_plot(legend_left, x = 0.012, y = 0.5, width = 0.3, height = 0.42) +
+  cowplot::draw_plot(legend_right, x = 0.69, y = 0.5, width = 0.3, height = 0.42) +
+  cowplot::draw_label("a", x = 0.003, y = 0.995, hjust = 0, vjust = 1, fontface = "bold",
+    size = 10, fontfamily = "Arial") +
+  cowplot::draw_label(bquote("Archived" ~ italic("Duplodnaviria") ~ "dendrogram:" ~
+      .(sprintf("%s tips (%s catalog, %s reference)", scales::comma(nrow(df_tip_rings)),
+        scales::comma(sum(df_tip_rings$sequence_set == "Catalog")),
+        scales::comma(sum(df_tip_rings$sequence_set == "Reference"))))),
+    x = 0.5, y = 0.022, size = 6.5, fontfamily = "Arial", colour = "#333333")
+module_levels <- c(names(module_labels), "No module label")
+df_node_modules <- df_network_nodes |>
+  dplyr::left_join(df_module_counts |> dplyr::select(module_id, composition),
+    by = "module_id", relationship = "many-to-one") |>
+  dplyr::mutate(composition = factor(dplyr::coalesce(composition, "No module label"),
+    levels = module_levels))
+df_module_sequences <- df_node_modules |> dplyr::count(composition, sequence_set, name = "sequences")
+df_module_totals <- df_module_counts |> dplyr::count(composition, name = "modules") |>
+  dplyr::mutate(composition = factor(composition, levels = module_levels)) |>
+  dplyr::arrange(composition)
+stopifnot(identical(df_module_totals$modules, c(97L, 68L, 55L)),
+  sum(df_node_modules$composition == "No module label") == 101,
+  sum(df_module_sequences$sequences[df_module_sequences$composition == "Catalog only"]) == 1838)
+df_row_bands <- tibble::tibble(composition = factor(module_levels[c(1, 3)], levels = module_levels))
+scale_module_rows <- ggplot2::scale_y_discrete(limits = rev(module_levels),
+  labels = c(module_labels, "No module label" = "No module label"))
+p6b_modules <- ggplot2::ggplot(df_module_totals, ggplot2::aes(modules, composition)) +
+  ggplot2::geom_tile(data = df_row_bands, ggplot2::aes(x = 55, y = composition), width = Inf,
+    height = 1, fill = "#F2F2F2", inherit.aes = FALSE) +
+  ggplot2::geom_col(ggplot2::aes(fill = composition), width = 0.62) +
+  ggplot2::geom_text(ggplot2::aes(label = modules), hjust = -0.25, size = 2, family = "Arial") +
+  ggplot2::annotate("text", x = 2, y = "No module label", label = "101 nodes without a module label",
+    hjust = 0, size = 1.9, family = "Arial", colour = "#4D4D4D") +
+  ggplot2::scale_fill_manual(values = pal_module, guide = "none") +
+  ggplot2::scale_x_continuous(limits = c(0, 110), breaks = c(0, 50, 100),
+    expand = ggplot2::expansion(c(0, 0.04))) +
+  scale_module_rows + ggplot2::labs(x = "Modules", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank())
+df_sequence_labels <- df_module_sequences |> dplyr::group_by(composition) |>
+  dplyr::summarise(total = sum(sequences),
+    label = paste(scales::comma(sequences), tolower(sequence_set), collapse = " + "),
+    .groups = "drop")
+p6b_sequences <- ggplot2::ggplot(df_module_sequences,
+    ggplot2::aes(sequences, composition, fill = sequence_set)) +
+  ggplot2::geom_tile(data = df_row_bands, ggplot2::aes(x = 1e4, y = composition), width = Inf,
+    height = 1, fill = "#F2F2F2", inherit.aes = FALSE) +
+  ggplot2::geom_col(width = 0.62, position = ggplot2::position_stack(reverse = TRUE)) +
+  ggplot2::geom_text(data = df_sequence_labels, ggplot2::aes(total, composition, label = label),
+    inherit.aes = FALSE, hjust = -0.04, size = 2, family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_set, guide = "none") +
+  ggplot2::scale_x_continuous(labels = scales::comma, limits = c(0, 23500),
+    expand = ggplot2::expansion(c(0, 0.01))) +
+  scale_module_rows + ggplot2::labs(x = "Network sequences", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank(),
+    axis.line.y = ggplot2::element_blank())
+p6b <- (p6b_modules | p6b_sequences) + patchwork::plot_layout(widths = c(1, 2.2))
+# The small bipartite graph has 268 nodes and 274 edges. Host-centered circles
+# separate the three main stars; a fixed seed orders vOTUs within each circle.
+# Every edge is a distinct predicted vOTU–order pair; positions have no metric meaning.
+df_vcx_members <- readxl::read_excel(file.path(path_revision, "table-s15-vcx-members.xlsx"),
+  sheet = "members")
+df_vcx_host_pairs <- readxl::read_excel(file.path(path_revision, "table-s15-vcx-members.xlsx"),
+  sheet = "host_orders")
+df_vcx_source_counts <- df_member_groups |> dplyr::filter(group != "Unassigned") |>
+  dplyr::distinct(vOTU_id, group) |> dplyr::count(vOTU_id, name = "source_group_count")
+df_vcx_plot_nodes <- dplyr::bind_rows(
+  df_vcx_members |> dplyr::filter(vOTU_id %in% df_vcx_host_pairs$vOTU_id) |>
+    dplyr::select(vOTU_id) |>
+    dplyr::left_join(df_vcx_source_counts, by = "vOTU_id", relationship = "one-to-one") |>
+    dplyr::transmute(name = vOTU_id, label = vOTU_id, node_type = "vOTU",
+      source_group_count = dplyr::coalesce(source_group_count, 0L),
+      node_size_groups = pmax(source_group_count, 1L)),
+  df_vcx_host_pairs |> dplyr::distinct(host_order) |> dplyr::arrange(host_order) |>
+    dplyr::transmute(name = paste0("host_order:", host_order), label = host_order,
+      node_type = "Host order"))
+df_vcx_plot_edges <- df_vcx_host_pairs |>
+  dplyr::transmute(from = vOTU_id, to = paste0("host_order:", host_order), supporting_contigs)
+stopifnot(nrow(df_vcx_plot_nodes) == 268L, nrow(df_vcx_plot_edges) == 274L,
+  !anyDuplicated(df_vcx_plot_nodes$name),
+  all(df_vcx_plot_nodes$node_size_groups[df_vcx_plot_nodes$node_type == "vOTU"] %in% 1:4))
+vcx_graph <- igraph::graph_from_data_frame(df_vcx_plot_edges, directed = FALSE,
+  vertices = df_vcx_plot_nodes)
+set.seed(44)
+df_vcx_host_anchors <- tibble::tribble(~label, ~x, ~y,
+  "Oscillospirales", 0, -15, "Christensenellales", -61, -10, "Lachnospirales", 61, -10,
+  "RF39", -76, 42, "Coriobacteriales", -38, 42, "UBA4068", 0, 42,
+  "UBA1381", 38, 42, "Peptostreptococcales", 76, 42,
+  "Bacteroidales", -76, 23, "Burkholderiales", -38, 23,
+  "Gastranaerophilales", 0, 23, "TANB77", 38, 23, "Peptococcales", 76, 23)
+df_vcx_positions <- df_vcx_plot_nodes |> dplyr::left_join(df_vcx_host_anchors,
+  by = "label", relationship = "many-to-one")
+vcx_orders_per_votu <- split(df_vcx_host_pairs$host_order, df_vcx_host_pairs$vOTU_id)
+for (v in names(vcx_orders_per_votu)[lengths(vcx_orders_per_votu) > 1]) {
+  hosts <- df_vcx_host_anchors |> dplyr::filter(label %in% vcx_orders_per_votu[[v]])
+  df_vcx_positions[df_vcx_positions$name == v, c("x", "y")] <- list(mean(hosts$x), mean(hosts$y))
+}
+for (host in c("Christensenellales", "Lachnospirales")) {
+  shared <- names(vcx_orders_per_votu)[vapply(vcx_orders_per_votu, function(x)
+    all(c(host, "Oscillospirales") %in% x), logical(1))]
+  df_vcx_positions[match(shared, df_vcx_positions$name), c("x", "y")] <-
+    list(if (host == "Christensenellales") -40 else 40,
+      if (host == "Christensenellales") seq(-31, 7, length.out = length(shared)) else c(-18, -12, -6))
+}
+for (host in df_vcx_host_anchors$label) {
+  single <- names(vcx_orders_per_votu)[vapply(vcx_orders_per_votu,
+    function(x) length(x) == 1 && x == host, logical(1))]
+  single <- sample(single, length(single))
+  center <- df_vcx_host_anchors[df_vcx_host_anchors$label == host, ]
+  if (length(single) == 0) next
+  if (host %in% c("Oscillospirales", "Christensenellales", "Lachnospirales")) {
+    radii <- if (host == "Oscillospirales") c(13, 19, 25, 31) else 16
+    counts <- round(length(single) * radii / sum(radii))
+    counts[length(counts)] <- length(single) - sum(head(counts, -1))
+    xy <- lapply(seq_along(radii), function(i) {
+      angles <- seq(0, 2 * pi, length.out = counts[i] + 1)[-1] + stats::runif(1, 0, 2 * pi)
+      data.frame(x = center$x + radii[i] * cos(angles), y = center$y + radii[i] * sin(angles))
+    }) |> dplyr::bind_rows()
+  } else {
+    xy <- data.frame(x = center$x + (seq_along(single) - (length(single) + 1) / 2) * 7,
+      y = center$y - 7)
+  }
+  df_vcx_positions[match(single, df_vcx_positions$name), c("x", "y")] <- xy
+}
+stopifnot(!anyNA(df_vcx_positions$x), !anyNA(df_vcx_positions$y))
+vcx_layout <- ggraph::create_layout(vcx_graph, layout = "manual",
+  x = df_vcx_positions$x, y = df_vcx_positions$y)
+df_vcx_host_positions <- as.data.frame(vcx_layout) |> dplyr::filter(node_type == "Host order") |>
+  dplyr::mutate(ellipse_a = nchar(label) * 0.64 + 1.6, ellipse_b = 2.8)
+p6c <- ggraph::ggraph(vcx_layout) +
+  ggraph::geom_edge_link(colour = "#A6ACB2", linewidth = 0.22, alpha = 0.75) +
+  ggraph::geom_node_point(ggplot2::aes(filter = node_type == "vOTU", size = node_size_groups),
+    colour = "#2186B7", alpha = 0.95) +
+  ggforce::geom_ellipse(data = df_vcx_host_positions,
+    ggplot2::aes(x0 = x, y0 = y, a = ellipse_a, b = ellipse_b, angle = 0),
+    inherit.aes = FALSE, fill = "#F2A3A5", colour = "#BA5158", linewidth = 0.3) +
+  ggplot2::geom_text(data = df_vcx_host_positions, ggplot2::aes(x, y, label = label),
+    inherit.aes = FALSE, family = "Arial", size = 2.2) +
+  ggplot2::scale_size_continuous(name = "Bird source groups per vOTU", limits = c(1, 4),
+    breaks = 1:4, range = c(1.25, 3.1)) +
+  ggplot2::coord_fixed(xlim = c(-98, 98), ylim = c(-49, 49), clip = "off") +
+  ggplot2::labs(title = "VCX: 255 vOTUs and 13 predicted host orders",
+    caption = "Blue circles: vOTUs; red ellipses: host orders.\n28 vOTUs without matched source metadata use size 1.") +
+  ggplot2::theme_void(base_family = "Arial", base_size = 7) +
+  ggplot2::theme(plot.title = ggplot2::element_text(size = 8, face = "bold", hjust = 0.5),
+    plot.caption = ggplot2::element_text(size = 6, hjust = 0),
+    legend.position = "bottom", legend.direction = "horizontal",
+    legend.title = ggplot2::element_text(size = 6.5), legend.text = ggplot2::element_text(size = 6),
+    legend.key.width = grid::unit(7, "mm"),
+    plot.margin = ggplot2::margin(4, 6, 3, 6))
+figure6 <- patchwork::wrap_elements(full = p6a) / panel_tag(p6b, "b") / panel_tag(p6c, "c") +
+  patchwork::plot_layout(heights = c(fan_height_mm, 36, 113))
+save_pub_r(figure6, path_target("figure6-gene-content"), height_mm = fan_height_mm + 36 + 113)
+readr::write_tsv(dplyr::bind_rows(
+  as.data.frame(vcx_layout) |> dplyr::transmute(record_type = "node", node_id = name,
+    node_type, label, x, y, source_group_count, node_size_groups),
+  df_vcx_plot_edges |> dplyr::transmute(record_type = "edge", source = from, target = to,
+    supporting_contigs)), path_target("figure6-vcx-network.tsv"))
+readr::write_tsv(df_module_sequences |> dplyr::left_join(df_module_totals, by = "composition"),
+  path_target("figure6-module-composition.tsv"))
+```
+
+## Supplementary Figure S1: overlap with fixed external catalogs
+
+Panel a gives the share of representatives that match each fixed catalog, for all
+representatives and for the near-complete subset; panel b resolves the overlaps among
+the three matched sets. A match requires ANI ≥95% over ≥85% of the shorter sequence.
+
+```{r}
+#| label: figureS1-catalog-overlap
+#| cache: false
+path_comparison <- file.path(path_revision, "catalog-comparison")
+df_overlap <- readr::read_tsv(file.path(path_comparison, "query-overlap-summary.tsv"),
+  show_col_types = FALSE)
+df_match_flags <- readr::read_tsv(file.path(path_comparison, "query-match-flags.tsv"),
+  show_col_types = FALSE)
+catalog_levels <- c("CVD", "CMKMC", "MGV", "Any compared catalog")
+pal_query_set <- c("All representatives" = "#0072B2", "Near-complete" = "#009E73")
+df_overlap_rates <- df_overlap |>
+  dplyr::filter(query_stratum %in% c("All", "Completeness>90%; contamination<=5%"),
+    reference_catalog %in% catalog_levels) |>
+  dplyr::mutate(reference_catalog = factor(reference_catalog, levels = rev(catalog_levels)),
+    query_set = factor(ifelse(query_stratum == "All", "All representatives", "Near-complete"),
+      levels = names(pal_query_set)),
+    label = sprintf("%s (%.1f%%)", scales::comma(matched_queries), matched_percent))
+stopifnot(nrow(df_overlap_rates) == 8, nrow(df_match_flags) == 61608,
+  sum(df_match_flags$matched_any) == 19938,
+  identical(sort(unique(df_overlap_rates$query_denominator)), c(12939, 61608)))
+df_catalog_bands <- tibble::tibble(reference_catalog = factor(catalog_levels[c(1, 3)],
+  levels = rev(catalog_levels)))
+pS1a <- ggplot2::ggplot(df_overlap_rates,
+    ggplot2::aes(matched_percent, reference_catalog, fill = query_set)) +
+  ggplot2::geom_tile(data = df_catalog_bands, ggplot2::aes(x = 50, y = reference_catalog),
+    width = Inf, height = 1, fill = "#F2F2F2", inherit.aes = FALSE) +
+  ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.72, reverse = TRUE), width = 0.66) +
+  ggplot2::geom_text(ggplot2::aes(label = label),
+    position = ggplot2::position_dodge(width = 0.72, reverse = TRUE), hjust = -0.08, size = 2,
+    family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_query_set, name = NULL,
+    labels = c("All representatives (n = 61,608)", "Near-complete (n = 12,939)")) +
+  ggplot2::scale_x_continuous(limits = c(0, 100), breaks = seq(0, 100, 25),
+    expand = ggplot2::expansion(c(0, 0))) +
+  ggplot2::scale_y_discrete(limits = rev(catalog_levels),
+    labels = c("Any compared catalog" = "Any of the three")) +
+  ggplot2::labs(x = "Representatives with a match (%)", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(legend.position = "top", legend.justification = "left",
+    axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank(),
+    plot.margin = ggplot2::margin(4, 8, 4, 4))
+df_catalog_sets <- df_match_flags |> dplyr::filter(matched_any) |>
+  dplyr::transmute(vOTU_id, CVD = matched_CVD, CMKMC = matched_CMKMC, MGV = matched_MGV)
+stopifnot(nrow(df_catalog_sets) == 19938,
+  sum(df_catalog_sets$MGV & !df_catalog_sets$CVD & !df_catalog_sets$CMKMC) == 749)
+pS1b <- upset_panel(as.data.frame(df_catalog_sets), c("CVD", "CMKMC", "MGV"),
+  "Matched representatives", upright_counts = TRUE)
+figureS1 <- (panel_tag(pS1a, "a") | panel_tag(pS1b, "b")) + patchwork::plot_layout(widths = c(1.15, 1))
+save_pub_r(figureS1, path_target("figureS1-catalog-overlap"), height_mm = 78)
+```
+
+## Supplementary Figure S2: IMG/VR matches by reference sampling context
+
+Panel a partitions each query set by its best available evidence: a match in CVD, CMKMC
+or MGV, a match found only in IMG/VR v5, or no match. Panel b counts the representatives
+that match references from each ecological source group; a representative can match
+several groups. The darker inner bar marks the representatives absent from the
+three-catalog union.
+
+```{r}
+#| label: figureS2-imgvr-context
+#| cache: false
+path_metavr <- file.path(path_revision, "catalog-comparison", "metavr")
+df_metavr_ecosystem <- readr::read_tsv(file.path(path_metavr, "ecosystem-summary.tsv"),
+  show_col_types = FALSE)
+df_metavr_queries <- readr::read_tsv(file.path(path_metavr, "query-summary.tsv"),
+  show_col_types = FALSE)
+stopifnot(identical(df_metavr_queries$representatives, c(61608, 12939)),
+  identical(df_metavr_queries$matched_four_catalogs, c(23515, 8526)), nrow(df_metavr_ecosystem) == 4)
+pal_match_status <- c("CVD, CMKMC or MGV" = "#0072B2", "IMG/VR only" = "#E69F00",
+  "No match" = "#D9D9D9")
+df_union_status <- df_metavr_queries |>
+  dplyr::transmute(query_set = factor(c("All representatives\n(n = 61,608)",
+      "Near-complete\n(n = 12,939)"), levels = rev(c("All representatives\n(n = 61,608)",
+      "Near-complete\n(n = 12,939)"))),
+    `CVD, CMKMC or MGV` = matched_three_catalogs,
+    `IMG/VR only` = matched_four_catalogs - matched_three_catalogs,
+    `No match` = unmatched_four_catalogs) |>
+  tidyr::pivot_longer(-query_set, names_to = "status", values_to = "representatives") |>
+  dplyr::mutate(status = factor(status, levels = names(pal_match_status))) |>
+  dplyr::group_by(query_set) |>
+  dplyr::mutate(percent = 100 * representatives / sum(representatives),
+    right = cumsum(percent), mid = right - percent / 2) |>
+  dplyr::ungroup()
+stopifnot(identical(df_union_status$representatives[df_union_status$status == "IMG/VR only"],
+  c(3577, 525)))
+df_union_inside <- df_union_status |> dplyr::filter(status != "IMG/VR only")
+df_union_outside <- df_union_status |> dplyr::filter(status == "IMG/VR only")
+pS2a <- ggplot2::ggplot(df_union_status, ggplot2::aes(percent, query_set, fill = status)) +
+  ggplot2::geom_col(width = 0.5, position = ggplot2::position_stack(reverse = TRUE)) +
+  ggplot2::geom_text(data = df_union_inside, ggplot2::aes(mid, query_set,
+      label = sprintf("%s\n%.1f%%", scales::comma(representatives), percent)),
+    inherit.aes = FALSE, size = 1.9, lineheight = 0.9, family = "Arial",
+    colour = ifelse(df_union_inside$status == "No match", "black", "white")) +
+  ggplot2::geom_segment(data = df_union_outside, ggplot2::aes(x = mid, xend = mid,
+      y = as.numeric(query_set) + 0.27, yend = as.numeric(query_set) + 0.36),
+    inherit.aes = FALSE, linewidth = 0.25) +
+  ggplot2::geom_text(data = df_union_outside, ggplot2::aes(mid, as.numeric(query_set) + 0.38,
+      label = sprintf("%s (%.1f%%)", scales::comma(representatives), percent)),
+    inherit.aes = FALSE, vjust = 0, size = 1.9, family = "Arial") +
+  ggplot2::scale_fill_manual(values = pal_match_status, name = NULL) +
+  ggplot2::scale_x_continuous(breaks = seq(0, 100, 25), expand = ggplot2::expansion(c(0, 0.01))) +
+  ggplot2::labs(x = "Representatives (%)", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(legend.position = "top", legend.justification = "left",
+    axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank())
+group_levels <- df_metavr_ecosystem |> dplyr::arrange(matched_queries) |>
+  dplyr::pull(ecosystem_group)
+df_context <- df_metavr_ecosystem |>
+  dplyr::mutate(ecosystem_group = factor(ecosystem_group, levels = group_levels))
+pS2b_bars <- ggplot2::ggplot(df_context, ggplot2::aes(y = ecosystem_group)) +
+  ggplot2::geom_col(ggplot2::aes(x = matched_queries, fill = "All IMG/VR matches"), width = 0.66) +
+  ggplot2::geom_col(ggplot2::aes(x = new_beyond_three_catalogs, fill = "Not in CVD, CMKMC or MGV"),
+    width = 0.36) +
+  ggplot2::geom_text(ggplot2::aes(x = matched_queries, label = scales::comma(matched_queries)),
+    hjust = -0.15, size = 2, family = "Arial") +
+  ggplot2::geom_text(ggplot2::aes(x = new_beyond_three_catalogs,
+      label = scales::comma(new_beyond_three_catalogs)),
+    hjust = 1.1, size = 1.8, family = "Arial", colour = "black") +
+  ggplot2::scale_fill_manual(values = c("All IMG/VR matches" = "#F5D9A8",
+    "Not in CVD, CMKMC or MGV" = "#E69F00"), name = NULL) +
+  ggplot2::scale_x_continuous(labels = scales::comma, breaks = seq(0, 8000, 2000),
+    expand = ggplot2::expansion(c(0, 0.14))) +
+  ggplot2::labs(x = "AvianViromeDB representatives", y = NULL) + theme_pub(6.5) +
+  ggplot2::theme(legend.position = "bottom", legend.justification = "left",
+    axis.ticks.y = ggplot2::element_blank(), axis.line.y = ggplot2::element_blank())
+pS2b_references <- ggplot2::ggplot(df_context,
+    ggplot2::aes(x = 1, y = ecosystem_group, label = scales::comma(references))) +
+  ggplot2::geom_text(hjust = 1, size = 2, family = "Arial", colour = "#333333") +
+  ggplot2::scale_x_continuous(limits = c(0, 1), expand = ggplot2::expansion(c(0, 0))) +
+  ggplot2::labs(title = "Matched reference\nsequences") + ggplot2::theme_void(base_family = "Arial") +
+  ggplot2::theme(plot.title = ggplot2::element_text(size = 6.2, face = "bold", hjust = 1,
+    lineheight = 0.9))
+pS2b <- (pS2b_bars | pS2b_references) + patchwork::plot_layout(widths = c(4, 0.9))
+figureS2 <- (panel_tag(pS2a, "a") | panel_tag(pS2b, "b")) + patchwork::plot_layout(widths = c(1, 1.15))
+save_pub_r(figureS2, path_target("figureS2-imgvr-context"), height_mm = 62)
+```

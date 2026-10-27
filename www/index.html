@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AvianViromeDB - DNA-Focused Avian Gut Viral Catalog</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand': {
+                            'teal': '#0891b2',
+                            'teal-light': '#06b6d4',
+                            'blue': '#1e40af',
+                            'blue-dark': '#1e3a8a',
+                            'blue-deeper': '#172554'
+                        },
+                        'primary': {
+                            light: '#2B9EB3', /* professional light teal */
+                            DEFAULT: '#0D6B6D', /* professional teal */
+                            dark: '#054B4D', /* professional dark teal */
+                        },
+                        'secondary': {
+                            light: '#2C7A9E', /* professional light blue */
+                            DEFAULT: '#1A4B6B', /* professional blue */
+                            dark: '#0D2B4A', /* professional dark blue */
+                        },
+                        'accent': '#0A5C6B', /* professional teal-blue accent */
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        .stat-card-base {
+            transition: all 0.3s ease;
+        }
+
+        .stat-card-base:hover {
+            transform: translateY(-2px);
+        }
+
+        .finding-icon {
+            width: 2.5rem;
+            height: 2.5rem;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .header-logo-img {
+            height: 2.5rem;
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        .footer-logo-img {
+            height: 2rem;
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        .download-card-icon {
+            width: 2rem;
+            height: 2rem;
+            margin-right: 0.75rem;
+        }
+
+        .hero-logo {
+            width: 120px;
+            height: 120px;
+            filter: drop-shadow(0 10px 20px rgba(14, 165, 233, 0.15));
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #0891b2 0%, #06b6d4 50%, #1e40af 100%);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #0891b2, #1e40af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Biological Icons */
+        .bio-icon-dna {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2L13.5 8.5L12 15L10.5 8.5L12 2M7 4L8.5 10.5L7 17L5.5 10.5L7 4M17 4L18.5 10.5L17 17L15.5 10.5L17 4M4 7L5.5 13.5L4 20L2.5 13.5L4 7M20 7L21.5 13.5L20 20L18.5 13.5L20 7M9 1L10.5 7.5L9 14L7.5 7.5L9 1M15 1L16.5 7.5L15 14L13.5 7.5L15 1"/></svg>');
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #0891b2;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #1e40af;
+        }
+
+        /* Animated elements */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .floating {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        /* Enhanced Card Styles */
+        .stat-card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            transition: all 300ms;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .stat-card:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border-color: #4ac1bd;
+        }
+        .stat-card svg {
+            width: 1.5rem;
+            height: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #0F7173;
+        }
+
+        .feature-card {
+             background-image: linear-gradient(to bottom right, #f0fafa, #ffffff, #ecf7fa);
+             padding: 1.5rem;
+             border-radius: 0.75rem;
+             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+             border: 1px solid #d0f0ee;
+             transition: box-shadow 0.3s;
+        }
+        .feature-card:hover {
+             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .feature-card svg {
+             width: 1.5rem;
+             height: 1.5rem;
+             margin-bottom: 0.5rem;
+             color: #0F7173;
+        }
+
+        /* Download button style */
+        .download-button {
+             margin-left: 0.5rem;
+             display: inline-flex;
+             align-items: center;
+             padding: 0.5rem 1rem;
+             background-color: #0F7173;
+             color: white;
+             font-size: 0.875rem;
+             font-weight: 500;
+             border-radius: 0.5rem;
+             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+             transition: background-color 0.2s;
+        }
+        .download-button:hover {
+             background-color: #065758;
+        }
+        .download-button:focus {
+             outline: none;
+             box-shadow: 0 0 0 2px white, 0 0 0 4px #4ac1bd;
+        }
+        .download-button svg {
+             height: 1rem;
+             width: 1rem;
+             margin-right: 0.5rem;
+        }
+        /* Link style */
+        a.text-link {
+             color: #0F7173;
+        }
+        a.text-link:hover {
+             color: #065758;
+             text-decoration: underline;
+        }
+        /* Download section card */
+        .download-card {
+             background-color: white;
+             padding: 2rem;
+             border-radius: 0.75rem;
+             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+             border: 1px solid #e5e7eb;
+        }
+        /* Download item style */
+        .download-item {
+             border-bottom: 1px solid #e5e7eb;
+             padding-top: 1rem;
+             padding-bottom: 1rem;
+        }
+        .download-item:last-child {
+             border-bottom: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800">
+
+    <header class="bg-white shadow-lg sticky top-0 z-50 border-b border-gray-100">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0 flex items-center">
+                    <img src="logo.png" alt="AvianViromeDB Logo" class="header-logo-img">
+                    <a href="#" class="text-2xl font-bold text-brand-teal hover:text-brand-blue transition-colors">AvianViromeDB</a>
+                </div>
+
+                <div class="flex items-center">
+                    <nav class="hidden md:flex items-center space-x-1 lg:space-x-2">
+                        <a href="#overview"
+                            class="text-gray-600 hover:text-brand-teal px-3 py-2 rounded-md text-sm font-medium transition-colors">Overview</a>
+                        <a href="#insights"
+                            class="text-gray-600 hover:text-brand-teal px-3 py-2 rounded-md text-sm font-medium transition-colors">Insights</a>
+                        <a href="#download"
+                            class="text-gray-600 hover:text-brand-teal px-3 py-2 rounded-md text-sm font-medium transition-colors">Download</a>
+                        <a href="browse.html" class="text-gray-600 hover:text-brand-teal px-3 py-2 rounded-md text-sm font-medium transition-colors">Browse preview</a>
+                        <a href="feedback.html" class="text-gray-600 hover:text-brand-teal px-3 py-2 rounded-md text-sm font-medium transition-colors">Feedback</a>
+                    </nav>
+                </div>
+
+                <div class="md:hidden flex items-center">
+                    <a href="https://github.com/PhageByte/AvianViromeDB" target="_blank"
+                        class="text-gray-500 hover:text-brand-teal transition-colors mr-2" title="View on GitHub">
+                        <span class="sr-only">View on GitHub</span>
+                        <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.379.201 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.308.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.001 10.001 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                clip-rule="evenodd" />
+                        </svg>
+                    </a>
+                    <button id="mobile-menu-button" aria-expanded="false" aria-controls="mobile-menu" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal">
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                        </svg>
+                        <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="md:hidden hidden" id="mobile-menu">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-gray-50">
+                <a href="#overview"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-teal hover:bg-white transition-colors">Overview</a>
+                <a href="#insights"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-teal hover:bg-white transition-colors">Insights</a>
+                <a href="#download"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-teal hover:bg-white transition-colors">Download</a>
+                <a href="browse.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-teal hover:bg-white transition-colors">Browse preview</a>
+                <a href="feedback.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-teal hover:bg-white transition-colors">Feedback</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="py-16 gradient-bg">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <div class="mb-8 floating">
+                    <img src="logo_R.png" alt="AvianViromeDB Logo" class="hero-logo mx-auto">
+                </div>
+                <h1 class="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
+                    <span class="block xl:inline">A DNA-Focused Catalog of the</span>
+                    <span class="block xl:inline text-cyan-100">Avian Gut Virome</span>
+                </h1>
+                <p class="mt-6 max-w-md mx-auto text-base text-cyan-50 sm:text-lg md:mt-8 md:text-xl md:max-w-4xl">
+                    AvianViromeDB is a DNA-focused gut viral catalog from poultry and other birds. It contains 61,608 viral operational taxonomic units (vOTUs) of varying completeness, with quality estimates, source metadata, and computational annotations. The catalog includes complete and partial sequences, with 27,800 entries annotated as at least medium quality.
+                </p>
+                <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <a href="#download" 
+                       class="inline-flex items-center px-6 py-3 text-lg font-medium text-brand-blue bg-white hover:bg-gray-50 rounded-lg shadow-lg transition-all transform hover:scale-105">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Download Database
+                    </a>
+                    <a href="https://github.com/PhageByte/AvianViromeDB" target="_blank"
+                       class="inline-flex items-center px-6 py-3 text-lg font-medium text-white bg-brand-blue-dark hover:bg-brand-blue-deeper rounded-lg shadow-lg transition-all transform hover:scale-105">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.379.201 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.308.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.001 10.001 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                        </svg>
+                        Source Code
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section id="overview" class="py-16 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">Database Overview</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="stat-card">
+                        <div class="text-4xl font-bold text-primary mb-1">28</div>
+                        <p class="text-gray-600 font-medium">Source Projects</p>
+                        <p class="text-sm text-gray-500">2,658 public source records</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-4xl font-bold text-primary mb-1">61,608</div>
+                        <p class="text-gray-600 font-medium">Viral OTUs (vOTUs)</p>
+                        <p class="text-sm text-gray-500">Complete and partial sequences</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-4xl font-bold text-accent mb-1">61.83%</div>
+                        <p class="text-gray-600 font-medium">Unmatched Across Four Catalogs</p>
+                        <p class="text-sm text-gray-500">CVD · CMKMC · MGV · IMG/VR v5</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-4xl font-bold text-secondary-light mb-1">10,000+</div>
+                        <p class="text-gray-600 font-medium">Functionally Annotated Proteins</p>
+                        <p class="text-sm text-gray-500">Computational predictions</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="insights" class="py-16 bg-gray-50">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">Scientific Insights</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="feature-card">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z" /> </svg>
+                        <h3 class="text-xl font-semibold text-primary-dark mb-2">Taxonomic Annotations</h3>
+                        <p class="text-gray-700">Provides predicted taxonomic affiliations with unresolved ranks retained explicitly. Sequence comparisons found 38,093 of 61,608 representatives (61.83%) unmatched in CVD, CMKMC, MGV and IMG/VR v5 at ≥95% ANI over ≥85% of the shorter sequence.</p>
+                    </div>
+                    <div class="feature-card">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /> </svg>
+                        <h3 class="text-xl font-semibold text-primary-dark mb-2">Predicted Functional Annotations</h3>
+                        <p class="text-gray-700">Provides sequence-based predictions of metabolic and other gene functions for reuse and experimental follow-up.</p>
+                    </div>
+                    <div class="feature-card">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /> </svg>
+                        <h3 class="text-xl font-semibold text-primary-dark mb-2">Predicted Microbial Hosts</h3>
+                        <p class="text-gray-700">Provides computational microbial-host assignments for catalog-linked sequences. Bird source metadata describes the sampled material; microbial-host predictions identify candidate hosts for follow-up.</p>
+                    </div>
+                 </div>
+            </div>
+        </section>
+
+       
+        <section id="download" class="py-16 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+                <p class="text-gray-700">Archived release: January 23, 2026, Zenodo record 18357633.
+                    Cite <a href="https://doi.org/10.5281/zenodo.18357633">this fixed release</a> for reproducibility;
+                    the <a href="https://doi.org/10.5281/zenodo.15660655">concept DOI</a> provides access to the release history.
+                    The <a href="browse.html" class="text-link underline">catalog metadata preview</a> supports filtering by identifier, quality, length and source coverage, with TSV export. An updated data archive is pending; the downloads below remain the January 23, 2026 release. Sequence searches and analyses can be run locally using these downloads.</p>
+                <p class="text-gray-700 mt-3">After decompressing a TSV download, open it in a spreadsheet application or a tabular analysis tool.
+                    Open the SQLite download with a SQLite client; the schema file lists its tables and columns.
+                    In the metadata preview, <code>vOTU_id</code> identifies the operational group and <code>contig_repid</code>
+                    identifies its representative sequence. Source assignment and bird source groups summarize retained members;
+                    class and family retain unresolved assignments as <code>unassigned</code>.</p>
+                <p class="text-gray-700 mt-3">To search query sequences against the catalog, build a nucleotide BLAST database from the sequence download:
+                    <code>gunzip -k vOTUs.fasta.gz; makeblastdb -in vOTUs.fasta -dbtype nucl -out AvianViromeDB;
+                    blastn -query query.fasta -db AvianViromeDB -outfmt 6 -max_target_seqs 10</code>.</p>
+                <p class="text-gray-700 mt-3">The archived release contains sequences across quality tiers. Use the CheckV quality and completeness fields
+                    to select sequences for downstream analysis. Gene and host annotations describe computational predictions linked to catalog members.</p>
+            </div>
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <h2 class="text-3xl font-bold text-center text-gray-900 mb-8">Download Database</h2>
+                <div class="py-8 container mx-auto px-4 sm:px-6 lg:px-8">
+                    <section class="download-card">
+                        <h2 class="text-2xl font-semibold text-secondary-dark mb-6 border-b border-gray-200 pb-4">Core Database Files</h2>
+                        <div class="space-y-6">
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Sequences</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Non-redundant viral operational taxonomic unit sequences.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(FASTA, ~523MB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/vOTUs.fasta.gz?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        vOTUs.fasta.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Protein Sequences</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Predicted protein sequences from vOTUs in FASTA format.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(FASTA, ~348MB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/vOTU_proteins.faa.gz?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        vOTU_proteins.faa.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Annotations</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Comprehensive metadata including quality metrics (CheckV), taxonomy (VITAP/geNomad), combined predicted lifestyle, source host, completeness, etc.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~3.2MB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/vOTU_annotation.tsv.gz?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        vOTU_annotation.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Functional Gene Annotations</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Separate VIBRANT and DRAM-v annotations, plus database screening records linked through cluster membership. Records can overlap across annotation sources.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~863KB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/gene_annotations.tar.gz?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        gene_annotations.tar.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Host Predictions</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Predicted microbial-host associations from iPHoP, linked to catalog clusters.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~5.6MB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/vOTU_prokyriotic_hosts.tsv.gz?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        vOTU_prokyriotic_hosts.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="download-card mt-8">
+                        <h2 class="text-2xl font-semibold text-secondary-dark mb-6 border-b border-gray-200 pb-4">Additional Resources</h2>
+                        <div class="space-y-6">
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">SQLite Database</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Complete database with all annotations in SQLite format for easy querying and analysis.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(SQLite, ~477MB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/AvianViromeDB.sqlite?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        AvianViromeDB.sqlite
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Database description</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Description of the database schema.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TXT, ~6.2KB)</span>
+                                    <a href="https://zenodo.org/records/18357633/files/db_description.txt?download=1" download class="download-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
+                                        db_description.txt
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+        
+        <!-- <section class="py-4 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="py-2 container mx-auto px-8 sm:px-6 lg:px-10">
+                    <h2 class="text-2xl font-semibold text-secondary-dark mb-4">How to Cite</h2>
+                    <p class="text-gray-600 mb-3">If you use AvianViromeDB data or resources in your research, please cite our publication:</p>
+                    <div class="bg-gray-100 p-4 rounded-lg text-sm text-gray-700 font-mono border border-gray-200">
+                        Will be updated upon published
+                    </div>
+                </div>
+            </div>
+        </section> -->
+        <section id="maintenance" class="py-12 bg-white border-t border-gray-200">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <h2 class="text-2xl font-semibold text-secondary-dark mb-4">Maintenance and community feedback</h2>
+                <p class="text-gray-700">denglab maintains AvianViromeDB. Corrections and additions will be released as needed,
+                    with each release archived separately on Zenodo and previous versions remaining citable.
+                    Release notes will record the date, data scope, and changes to identifiers or annotations.</p>
+                <p class="text-gray-700 mt-3">Use the <a href="feedback.html" class="text-link underline">feedback page</a>
+                    to report issues or suggest public studies for review and possible inclusion in a future release.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-slate-100 py-8 text-gray-700 border-t border-slate-200">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-5 gap-8">
+                <!--an empty column-->
+                <div class="md:col-span-1"></div>
+                <!-- About Section -->
+                <div class="md:col-span-2">
+                    <div class="flex items-center mb-4">
+                        <img src="logo.png" alt="AvianViromeDB Logo" class="footer-logo-img">
+                        <h3 class="text-xl font-semibold text-brand-blue">AvianViromeDB</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">
+                        &copy; <span id="currentYearFooter"></span> AvianViromeDB. All Rights Reserved.
+                    </p>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xs text-gray-400">Built with</span>
+                        <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5 2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/>
+                        </svg>
+                        <span class="text-xs text-gray-400">for science</span>
+                    </div>
+                </div>
+
+
+                <!-- Resources Section -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">Contact us</h3>
+                    <ul class="space-y-3 text-sm">
+                        <li>
+                            <a href="https://github.com/PhageByte/AvianViromeDB" target="_blank"
+                                class="text-gray-600 hover:text-brand-teal hover:underline flex items-center">
+                                <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                    <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.379.201 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.308.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.001 10.001 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                                </svg>
+                                GitHub
+                            </a>
+                        </li>
+                        <li>
+                            <a href="mailto:jinlong.ru@tum.de"
+                                class="text-gray-600 hover:text-brand-teal hover:underline flex items-center">
+                                <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                                Email
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="md:col-span-1"></div>
+
+                <!-- Citation Section -->
+                <!-- <div class="md:col-span-1">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">Cite</h3>
+                    <div class="text-sm space-y-3">
+                        <div>
+                            <div class="text-gray-600 text-xs">
+                                <p class="mt-1 italic">Will be updated upon published</p>
+                            </div>
+                        </div>
+                    </div>
+                </div> -->
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const menuIconOpen = mobileMenuButton.querySelector('svg:nth-child(2)');
+        const menuIconClose = mobileMenuButton.querySelector('svg:nth-child(3)');
+
+        mobileMenuButton.addEventListener('click', () => {
+            const expanded = mobileMenuButton.getAttribute('aria-expanded') === 'true' || false;
+            mobileMenuButton.setAttribute('aria-expanded', !expanded);
+            mobileMenu.classList.toggle('hidden');
+            menuIconOpen.classList.toggle('hidden');
+            menuIconOpen.classList.toggle('block');
+            menuIconClose.classList.toggle('hidden');
+            menuIconClose.classList.toggle('block');
+        });
+
+        // Smooth scroll to anchor & close mobile menu
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                if (this.hash !== "") {
+                    e.preventDefault();
+                    const hash = this.hash;
+                    const targetElement = document.querySelector(hash);
+                    if (targetElement) {
+                        // Calculate offset for sticky header
+                        const headerHeight = document.querySelector('header').offsetHeight;
+                        const elementPosition = targetElement.offsetTop - headerHeight - 20;
+                        
+                        window.scrollTo({
+                            top: elementPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                    // If mobile menu is open, close it
+                    if (!mobileMenu.classList.contains('hidden')) {
+                        mobileMenuButton.setAttribute('aria-expanded', 'false');
+                        mobileMenu.classList.add('hidden');
+                        menuIconOpen.classList.remove('hidden');
+                        menuIconOpen.classList.add('block');
+                        menuIconClose.classList.add('hidden');
+                        menuIconClose.classList.remove('block');
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting
+        function highlightActiveSection() {
+            const sections = document.querySelectorAll('section[id]');
+            const navLinks = document.querySelectorAll('nav a[href^="#"]');
+            
+            let current = '';
+            const headerHeight = document.querySelector('header').offsetHeight;
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - headerHeight - 50;
+                const sectionHeight = section.clientHeight;
+                if (scrollY >= sectionTop && scrollY < sectionTop + sectionHeight) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('text-brand-teal', 'bg-brand-teal', 'bg-opacity-10');
+                link.classList.add('text-gray-600');
+                
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.remove('text-gray-600');
+                    link.classList.add('text-brand-teal', 'bg-brand-teal', 'bg-opacity-10');
+                }
+            });
+        }
+
+        // Listen for scroll events
+        window.addEventListener('scroll', highlightActiveSection);
+
+        // Set current year in footer
+        document.getElementById('currentYearFooter').textContent = new Date().getFullYear();
+
+        // Add loading animation to download buttons
+        document.querySelectorAll('a[href="#"]').forEach(button => {
+            if (button.textContent.includes('Download')) {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const originalText = this.innerHTML;
+                    this.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Preparing Download...';
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        // Here you would typically trigger the actual download
+                        alert('Download links will be available once the database is deployed. Please check back soon!');
+                    }, 2000);
+                });
+            }
+        });
+
+        // Add intersection observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-fade-in');
+                }
+            });
+        }, observerOptions);
+
+        // Observe stat cards and insight cards
+        document.querySelectorAll('.stat-card-base, .finding-icon').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+
+    <style>
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fade-in 0.6s ease-out forwards;
+        }
+
+        /* Improve hover effects */
+        .stat-card-base:hover .bg-gradient-to-r {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+    </style>
+
+</body>
+
+</html>

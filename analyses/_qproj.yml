@@ -1,0 +1,5 @@
+database: pc028e3.sqlite
+render:
+  last:
+    - 100-reviewer-revision.qmd
+    - 101-revision-figures.qmd

@@ -1,0 +1,71 @@
+Package: AvianViromeDB
+Title: Avian Virome Database
+Version: 0.0.1
+Authors@R: 
+    person("Jinlong", "Ru", , "jinlong.ru@tum.de", role = c("aut", "cre"))
+Description: Code for AvianViromeDB, a DNA-focused catalog of avian gut viral
+    sequences assembled from public, predominantly poultry metagenomes, with
+    quality estimates, source associations and computational annotations.
+License: GPL (>= 3)
+URL: https://github.com/PhageByte/AvianViromeDB, https://phagebyte.github.io/avianviromedb
+BugReports: https://github.com/PhageByte/AvianViromeDB/issues
+Imports: 
+    bslib,
+    config,
+    conflicted,
+    cowplot,
+    data.table,
+    DBI,
+    devtools,
+    dplyr,
+    DT,
+    fresh,
+    ggExtra,
+    ggplot2,
+    ggraph,
+    ggrepel,
+    ggvenn,
+    golem,
+    grid,
+    here,
+    htmltools,
+    htmlwidgets,
+    igraph,
+    knitr,
+    magrittr,
+    networkD3,
+    openxlsx,
+    pcutils,
+    plotly,
+    plotrix,
+    projthis,
+    purrr,
+    RColorBrewer,
+    RCy3,
+    reactable,
+    rmarkdown,
+    RSQLite,
+    sankeyD3,
+    scales,
+    scatterpie,
+    shiny,
+    shinydashboard,
+    stringr,
+    svglite,
+    tibble,
+    tidygeocoder,
+    tidygraph,
+    tidyr,
+    tidyverse,
+    UpSetR,
+    webshot2
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: 
+    knitr
+Config/testthat/edition: 3
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.2
