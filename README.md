@@ -1,6 +1,6 @@
 # AvianViromeDB
 
-Code for **AvianViromeDB: a poultry-dominated, DNA-focused catalog of avian gut viral sequences**.
+Code for **AvianViromeDB**, a catalog of the avian gut DNA virome assembled from 2,658 public metagenomes, most of them from poultry.
 
 ![AvianViromeDB](www/logo.png)
 
