@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AvianViromeDB network</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="network/style.css">
+  <script defer src="network/vendor/deck.gl/dist.min.js"></script>
+  <script type="module" src="network/app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><a href="index.html">← Home</a><h1>AvianViromeDB network</h1></div>
+    <form id="search-form" role="search">
+      <label class="sr-only" for="search">Search genomes, families or modules</label>
+      <input id="search" type="search" placeholder="vOTU, contig, RefSeq, family, module…" autocomplete="off"
+        aria-controls="suggestions" aria-expanded="false" disabled>
+      <ul id="suggestions" aria-label="Search suggestions" hidden></ul>
+    </form>
+    <div class="presets">
+      <button id="vcx" disabled>VCX (Fig. 6b)</button><button id="whole" disabled>Whole network</button>
+    </div>
+    <label class="control">Color <select id="color" disabled>
+      <option value="vcx">VCX focus</option><option value="set">Sequence set</option>
+      <option value="module">Module</option><option value="family">Family</option>
+      <option value="host_phylum">Host phylum</option>
+    </select></label>
+    <label class="control">Edges <select id="edges" disabled>
+      <option value="selection">Selection</option><option value="backbone">Backbone</option>
+      <option value="all" disabled>All edges</option><option value="none">None</option>
+    </select></label>
+    <div class="actions"><button id="copy" disabled>Copy link</button><button id="png" disabled>PNG</button>
+      <button id="toggle" aria-expanded="true" aria-controls="inspector">Inspector</button></div>
+  </header>
+  <main id="viewport" aria-label="Interactive gene-sharing network">
+    <canvas id="network-canvas" aria-label="Network: drag to pan and scroll or pinch to zoom"></canvas>
+    <div class="network-status"><strong id="counts">Loading network…</strong>
+      <span id="progress" role="status">Loading nodes and modules</span><span id="notice" role="status"></span></div>
+    <aside id="inspector" aria-label="Selection inspector">
+      <div id="details"><h2>Explore Fig. 6b</h2><p>Find a genome or an Infomap module. Select VCX to explore the module highlighted in the figure.</p></div>
+    </aside>
+    <section id="legend" aria-label="Network legend">
+      <strong id="legend-title">VCX focus</strong><div id="legend-items"></div>
+      <div id="edge-legend"></div>
+      <p>Positions come from a force-directed layout; screen distance is not a similarity measure. Edges link genomes that share significant numbers of protein clusters (vConTACT3).</p>
+      <small>Drag to pan · Scroll or pinch to zoom · Click to inspect</small>
+    </section>
+    <div id="tooltip" role="tooltip" hidden></div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,225 @@
+---
+title: "Network explorer data"
+date: today
+params:
+  name: "104-network-explorer"
+---
+
+**Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S %Z')`.**
+
+```{r}
+#| label: params
+#| eval: !expr interactive()
+#| include: false
+params <- list(name = "104-network-explorer")
+```
+
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+#| warning: false
+#| cache: false
+options(warnPartialMatchDollar = TRUE)
+wd <- "analyses"
+if (basename(getwd()) != wd) {
+    setwd(here::here(wd))
+}
+here::i_am("104-network-explorer.qmd", uuid = "2bd2e884-53b6-407f-8e64-8c6eb36e09b7")
+qproj::proj_create_dir_target(params$name)
+
+# convenience helpers
+path_target <- qproj::proj_path_target(params$name)
+path_source <- qproj::proj_path_source(params$name)
+path_raw <- path_source("00-raw")
+path_resource <- here::here(path_raw, "d00-resource")
+path_data <- here::here(path_raw, paste0("d", params$name))
+```
+
+```{r}
+#| label: packages
+#| message: false
+#| warning: false
+#| cache: false
+suppressPackageStartupMessages({
+  library(here)
+  library(conflicted)
+  library(tidyverse)
+  library(data.table)
+})
+# Resolve common dplyr / data.table / stats name clashes up front.
+# Add more `conflicts_prefer()` calls below as needed.
+# `setdiff`: Quarto's knitr hooks call it from the global environment, and a
+# package attached later (Biostrings, via mia) exports its own; without a
+# preference conflicted stops the render at the first chunk. dplyr's generic
+# handles vectors, data frames and XStringSet alike; base's breaks on data frames.
+conflicted::conflicts_prefer(
+  dplyr::filter,
+  dplyr::lag,
+  dplyr::first,
+  dplyr::last,
+  dplyr::between,
+  dplyr::setdiff,
+  .quiet = TRUE
+)
+```
+
+## Question
+
+The website gains an interactive explorer of the gene-sharing network drawn in Fig. 6b,
+so that readers can locate VCX and every other Infomap module, inspect members, and see
+where modules connect. This step exports the static data files the explorer loads; the
+page itself lives in `www/network/`.
+
+Inputs: node coordinates and edges of panel b (step 103, the same layout as the figure),
+module membership and network attributes of the analysis network (step 100), and
+vOTU annotations and iPHoP predictions from `pc028e3.sqlite`. Joins use exact
+identifiers; building the adjacency list is linear in the number of edges.
+
+## Design
+
+The page uses deck.gl 9.4 (MIT): an `OrthographicView` with a `ScatterplotLayer` for the
+nodes and `LineLayer`s for edges, all fed from binary buffers. Edges are shown in three
+levels: the overview draws every node plus module-to-module summary edges, a selection
+draws the real edges of the selected node or module, and the full set of 2,301,056
+edges is drawn on request. A Web Worker computes selection edges from the CSR list.
+The interface offers a VCX preset, search, an inspector, colour modes, shareable URL
+state, PNG export and a note that layout distance is not a similarity measure.
+
+## Nodes
+
+```{r}
+#| label: nodes
+#| cache: false
+df_nodes <- readr::read_tsv(path_source("103-fig6-dendrogram", "panel-b-nodes.tsv.gz"),
+  show_col_types = FALSE)
+df_edges <- readr::read_tsv(path_source("103-fig6-dendrogram", "panel-b-edges.tsv.gz"),
+  show_col_types = FALSE)
+df_net <- readr::read_tsv(path_source("100-reviewer-revision", "figure6-network-nodes.tsv"),
+  show_col_types = FALSE, guess_max = 20000)
+con <- DBI::dbConnect(RSQLite::SQLite(), here::here("pc028e3.sqlite"), flags = RSQLite::SQLITE_RO)
+df_votu <- DBI::dbGetQuery(con, "SELECT vOTU_id, contig_repid, class, family, lifestyle,
+  host_Chicken, host_Duck, host_Goose, host_Coturnix, host_Pigeon, host_Bird, host_Egret
+  FROM contig_annotation_filtered_vOTU")
+df_hosts <- DBI::dbReadTable(con, "host_filtered")
+DBI::dbDisconnect(con)
+df_host_phylum <- df_hosts |>
+  dplyr::mutate(phylum = stringr::str_match(Host.taxonomy, "p__([^;]+)")[, 2]) |>
+  dplyr::distinct(contig_id, phylum) |>
+  dplyr::group_by(contig_id) |>
+  dplyr::summarise(host_phylum = if (dplyr::n() == 1) phylum[[1]] else "Multiple phyla",
+    .groups = "drop")
+bird_groups <- function(chicken, duck, goose, other) {
+  purrr::pmap_chr(list(chicken, duck, goose, other), function(c, d, g, o)
+    paste(c("Chicken", "Duck", "Goose", "Other birds")[c(c > 0, d > 0, g > 0, o > 0)], collapse = ";"))
+}
+df_explorer <- df_nodes |>
+  dplyr::left_join(df_net |> dplyr::select(label = tree_label, genome_name, module_id, vOTU_id,
+    length = network_sequence_length, quality = network_sequence_quality),
+    by = "label", relationship = "one-to-one") |>
+  dplyr::left_join(df_votu, by = "vOTU_id", relationship = "many-to-one") |>
+  dplyr::left_join(df_host_phylum, by = c(contig_repid = "contig_id"), relationship = "many-to-one") |>
+  dplyr::mutate(
+    family = dplyr::if_else(is.na(family) | stringr::str_starts(family, stringr::fixed("[")),
+      NA_character_, family),
+    class = dplyr::if_else(is.na(class) | stringr::str_starts(class, stringr::fixed("[")),
+      NA_character_, class),
+    birds = dplyr::if_else(node_set == "catalog",
+      bird_groups(dplyr::coalesce(host_Chicken, 0), dplyr::coalesce(host_Duck, 0),
+        dplyr::coalesce(host_Goose, 0), dplyr::coalesce(host_Coturnix, 0) +
+          dplyr::coalesce(host_Pigeon, 0) + dplyr::coalesce(host_Bird, 0) + dplyr::coalesce(host_Egret, 0)),
+      NA_character_),
+    host_phylum = dplyr::if_else(node_set == "catalog", dplyr::coalesce(host_phylum, "No prediction"),
+      NA_character_))
+stopifnot(nrow(df_explorer) == 17838, all(df_explorer$node_index == seq_len(17838) - 1L),
+  sum(df_explorer$vcx) == 266, all(df_explorer$module_id[df_explorer$vcx] == 44))
+knitr::kable(df_explorer |> dplyr::summarise(nodes = dplyr::n(), with_module = sum(!is.na(module_id)),
+  catalog = sum(node_set == "catalog"), catalog_with_vOTU = sum(!is.na(vOTU_id)),
+  with_family = sum(!is.na(family)), with_host_prediction = sum(host_phylum != "No prediction", na.rm = TRUE)))
+```
+
+## Adjacency and modules
+
+The explorer stores the undirected edges as a symmetric compressed sparse row (CSR)
+list: `offsets` has one entry per node plus one, and the neighbours of node *i* are
+`targets[offsets[i]:offsets[i+1]]`. Module statistics and the module-to-module edge
+counts give the explorer a backbone view and the neighbour ranking of any module.
+
+```{r}
+#| label: adjacency-modules
+#| cache: false
+n_nodes <- nrow(df_explorer)
+dt_adj <- data.table::rbindlist(list(
+  data.table::data.table(from = df_edges$source_index, to = df_edges$target_index),
+  data.table::data.table(from = df_edges$target_index, to = df_edges$source_index)))
+data.table::setorder(dt_adj, from, to)
+offsets <- c(0L, cumsum(tabulate(dt_adj$from + 1L, nbins = n_nodes)))
+stopifnot(length(offsets) == n_nodes + 1L, offsets[n_nodes + 1L] == 2L * nrow(df_edges),
+  max(dt_adj$to) < 65536L)
+module_of <- df_explorer$module_id
+dt_mod_edges <- data.table::data.table(a = module_of[df_edges$source_index + 1L],
+  b = module_of[df_edges$target_index + 1L])[!is.na(a) & !is.na(b) & a != b]
+dt_mod_edges[, `:=`(m1 = pmin(a, b), m2 = pmax(a, b))]
+dt_backbone <- dt_mod_edges[, .(edges = .N), by = .(m1, m2)][order(-edges)]
+df_modules <- df_explorer |> dplyr::filter(!is.na(module_id)) |>
+  dplyr::group_by(module_id) |>
+  dplyr::summarise(members = dplyr::n(), catalog = sum(node_set == "catalog"),
+    refseq = sum(node_set == "refseq"), x = stats::median(x), y = stats::median(y), .groups = "drop") |>
+  dplyr::mutate(composition = dplyr::case_when(refseq == 0 ~ "Catalog only",
+    catalog == 0 ~ "RefSeq only", TRUE ~ "Mixed"),
+    label = dplyr::if_else(module_id == 44, "VCX (module 44)", paste("Module", module_id)))
+internal_edges <- data.table::data.table(m = module_of[df_edges$source_index + 1L],
+  m2 = module_of[df_edges$target_index + 1L])[!is.na(m) & m == m2, .(internal = .N), by = m]
+df_modules <- df_modules |> dplyr::left_join(internal_edges, by = c(module_id = "m")) |>
+  dplyr::mutate(internal = dplyr::coalesce(internal, 0L))
+vcx_neighbours <- dt_backbone[m1 == 44 | m2 == 44][, .(module = ifelse(m1 == 44, m2, m1), edges)]
+readr::write_tsv(dt_backbone, path_target("module-backbone.tsv"))
+knitr::kable(head(vcx_neighbours, 8), caption = "Modules sharing the most edges with VCX in the displayed network")
+```
+
+## Web files
+
+```{r}
+#| label: web-files
+#| cache: false
+dir_web <- path_target("web")
+dir.create(dir_web, showWarnings = FALSE)
+write_bin <- function(x, file, what, size) {
+  con <- file(file.path(dir_web, file), "wb")
+  writeBin(what(x), con, size = size, endian = "little")
+  close(con)
+}
+write_bin(offsets, "csr-offsets.u32", as.integer, 4)
+write_bin(dt_adj$to, "csr-targets.u16", as.integer, 2)
+codes <- function(v) { lev <- sort(unique(stats::na.omit(v))); list(levels = lev, codes = ifelse(is.na(v), -1L, match(v, lev) - 1L)) }
+fam <- codes(df_explorer$family); cls <- codes(df_explorer$class); hp <- codes(df_explorer$host_phylum)
+jsonlite::write_json(list(
+  n = n_nodes, edges = nrow(df_edges),
+  x = round(df_explorer$x, 1), y = round(df_explorer$y, 1),
+  label = df_explorer$label, name = dplyr::coalesce(df_explorer$genome_name, df_explorer$label),
+  set = as.integer(df_explorer$node_set == "refseq"), module = dplyr::coalesce(df_explorer$module_id, -1L),
+  vOTU = dplyr::coalesce(df_explorer$vOTU_id, ""), length = dplyr::coalesce(df_explorer$length, -1),
+  quality = dplyr::coalesce(df_explorer$quality, ""), lifestyle = dplyr::coalesce(df_explorer$lifestyle, ""),
+  birds = dplyr::coalesce(df_explorer$birds, ""),
+  family = fam$codes, family_levels = fam$levels, class = cls$codes, class_levels = cls$levels,
+  host_phylum = hp$codes, host_phylum_levels = hp$levels),
+  file.path(dir_web, "nodes.json"), auto_unbox = TRUE, digits = NA)
+jsonlite::write_json(list(
+  modules = df_modules,
+  backbone = dt_backbone[edges >= 50],
+  presets = list(vcx = list(module = 44L, label = "VCX (Fig. 6b)"))),
+  file.path(dir_web, "modules.json"), auto_unbox = TRUE, digits = NA, dataframe = "rows")
+knitr::kable(tibble::tibble(file = list.files(dir_web),
+  MB = round(file.size(file.path(dir_web, list.files(dir_web))) / 1e6, 2)))
+```
+
+## Files written
+
+These files have been written to the target directory, `r paste0("data/", params$name)`:
+
+```{r}
+#| label: list-files-target
+#| message: false
+qproj::proj_run_finish(params$name)
+knitr::kable(qproj::proj_dir_info(path_target(), tz = NULL))
+```

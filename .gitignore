@@ -11,3 +11,5 @@ analyses/*_files/
 analyses/*_cache/
 *.sqlite
 www/catalog-summary.json
+www/network/data/
+www/network/tests/*.png

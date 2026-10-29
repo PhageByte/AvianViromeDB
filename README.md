@@ -22,8 +22,9 @@ The catalog contains 61,608 vOTUs of varying completeness from 2,658 public sour
 | [99-db_publish.qmd](analyses/99-db_publish.qmd), [publish.py](analyses/publish.py) | Build the release package |
 | [100-reviewer-revision.qmd](analyses/100-reviewer-revision.qmd) | Produces supplementary tables, external catalog comparisons, taxonomy corroboration, screening summaries and the release package |
 | [101-revision-figures.qmd](analyses/101-revision-figures.qmd) | Draws figures from the step 100 outputs |
+| [104-network-explorer.qmd](analyses/104-network-explorer.qmd) | Exports the node, module and adjacency files of the network explorer from the Fig. 6b layout |
 | [verify_production.py](hpc/pc028e3-100-metavr/scripts/followup/verify_production.py) | Validates completed IMG/VR comparisons and summarizes matched reference sampling contexts for step 100 |
-| [www/](www/) | Website source; the catalog browser reads `catalog-summary.json`, which step 100 generates |
+| [www/](www/) | Website source; the catalog browser reads `catalog-summary.json`, which step 100 generates, and the [network explorer](www/network.html) reads the files that step 104 writes |
 
 ## Running
 
@@ -31,7 +32,7 @@ The analysis steps follow a qproj layout and are rendered from `analyses/` with 
 
 Each QMD declares its R packages and input files. The comparison scripts require Python 3.11 or newer with Biopython, NumPy, pandas, vpipe and taxMyPhage, plus BLAST+, Mash and the other executables named in the scripts. The included IMG/VR verification helper uses the Python standard library and reads completed comparison tables from `analyses/data/00-raw/hpc/`. Generated Slurm jobs inherit the submitting environment; activate these dependencies before submission and adapt resource requests to your cluster. Supplementary workbooks and source figures must be supplied at the paths named in the analysis steps.
 
-Step 100 writes the browser metadata to `analyses/data/100-reviewer-revision/remaining-evidence/website/catalog-summary.json`. Copy that file into [www/](www/) and serve the directory over HTTP to use the browser. The metadata preview and the versioned sequence downloads have separate release states; an updated data archive is pending.
+Step 100 writes the browser metadata to `analyses/data/100-reviewer-revision/remaining-evidence/website/catalog-summary.json`. Copy that file into [www/](www/) and serve the directory over HTTP to use the browser. Step 104 writes the explorer files to `analyses/data/104-network-explorer/web/`; copy them into `www/network/data/` to use the network explorer. The metadata preview and the versioned sequence downloads have separate release states; an updated data archive is pending.
 
 ## Releases and maintenance
 
