@@ -7,7 +7,7 @@ Code for **AvianViromeDB**, a catalog of the avian gut DNA virome assembled from
 The catalog contains 61,608 vOTUs of varying completeness from 2,658 public source records. Across CVD, CMKMC, MGV and IMG/VR v5, 38,093 representatives (61.83%) remain unmatched at ≥95% ANI over ≥85% of the shorter sequence. Gene functions and microbial hosts are computational predictions.
 
 - Website and catalog browser: [AvianViromeDB](https://phagebyte.github.io/avianviromedb)
-- Archived data release: [January 23, 2026 · 10.5281/zenodo.18357633](https://doi.org/10.5281/zenodo.18357633)
+- Archived data release: [October 29, 2026 (version 4) · 10.5281/zenodo.23768304](https://doi.org/10.5281/zenodo.23768304)
 - Data releases: Zenodo, concept DOI [10.5281/zenodo.15660655](https://doi.org/10.5281/zenodo.15660655)
 - Feedback and study suggestions: [GitHub Issues](https://github.com/PhageByte/AvianViromeDB/issues)
 
@@ -32,7 +32,7 @@ The analysis steps follow a qproj layout and are rendered from `analyses/` with 
 
 Each QMD declares its R packages and input files. The comparison scripts require Python 3.11 or newer with Biopython, NumPy, pandas, vpipe and taxMyPhage, plus BLAST+, Mash and the other executables named in the scripts. The included IMG/VR verification helper uses the Python standard library and reads completed comparison tables from `analyses/data/00-raw/hpc/`. Generated Slurm jobs inherit the submitting environment; activate these dependencies before submission and adapt resource requests to your cluster. Supplementary workbooks and source figures must be supplied at the paths named in the analysis steps.
 
-Step 100 writes the browser metadata to `analyses/data/100-reviewer-revision/remaining-evidence/website/catalog-summary.json`. Copy that file into [www/](www/) and serve the directory over HTTP to use the browser. Step 104 writes the explorer files to `analyses/data/104-network-explorer/web/`; copy them into `www/network/data/` to use the network explorer. The metadata preview and the versioned sequence downloads have separate release states; an updated data archive is pending.
+Step 100 writes the browser metadata to `analyses/data/100-reviewer-revision/remaining-evidence/website/catalog-summary.json`. Copy that file into [www/](www/) and serve the directory over HTTP to use the browser. Step 104 writes the explorer files to `analyses/data/104-network-explorer/web/`; copy them into `www/network/data/` to use the network explorer. The browser metadata and the sequence downloads describe the same October 29, 2026 release.
 
 ## Releases and maintenance
 
