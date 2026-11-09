@@ -295,7 +295,7 @@
                     <span class="block xl:inline text-cyan-100">Avian Gut DNA Virome</span>
                 </h1>
                 <p class="mt-6 max-w-md mx-auto text-base text-cyan-50 sm:text-lg md:mt-8 md:text-xl md:max-w-4xl">
-                    AvianViromeDB catalogs DNA viruses from the guts of poultry and other birds. It contains 61,608 viral operational taxonomic units (vOTUs) of varying completeness, with quality estimates, source metadata, and computational annotations. The catalog includes complete and partial sequences, with 27,800 entries annotated as at least medium quality.
+                    AvianViromeDB catalogs DNA viruses from the guts of poultry and other birds. Release 4 contains 61,608 viral operational taxonomic units (vOTUs) with CheckV quality estimates, curated source metadata, and computational annotations; 27,800 vOTUs reach medium quality or higher.
                 </p>
                 <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
                     <a href="#download" 
@@ -328,17 +328,17 @@
                     <div class="stat-card">
                         <div class="text-4xl font-bold text-primary mb-1">61,608</div>
                         <p class="text-gray-600 font-medium">Viral OTUs (vOTUs)</p>
-                        <p class="text-sm text-gray-500">Complete and partial sequences</p>
+                        <p class="text-sm text-gray-500">5,829 complete · 27,800 medium quality or higher</p>
                     </div>
                     <div class="stat-card">
                         <div class="text-4xl font-bold text-accent mb-1">61.83%</div>
-                        <p class="text-gray-600 font-medium">Unmatched Across Four Catalogs</p>
+                        <p class="text-gray-600 font-medium">Unmatched in Four Reference Catalogs</p>
                         <p class="text-sm text-gray-500">CVD · CMKMC · MGV · IMG/VR v5</p>
                     </div>
                     <div class="stat-card">
-                        <div class="text-4xl font-bold text-secondary-light mb-1">10,000+</div>
-                        <p class="text-gray-600 font-medium">Functionally Annotated Proteins</p>
-                        <p class="text-sm text-gray-500">Computational predictions</p>
+                        <div class="text-4xl font-bold text-secondary-light mb-1">13,645</div>
+                        <p class="text-gray-600 font-medium">vOTUs with Predicted AMGs</p>
+                        <p class="text-sm text-gray-500">DRAM-v · VIBRANT</p>
                     </div>
                 </div>
             </div>
@@ -351,17 +351,17 @@
                     <div class="feature-card">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z" /> </svg>
                         <h3 class="text-xl font-semibold text-primary-dark mb-2">Taxonomic Annotations</h3>
-                        <p class="text-gray-700">Provides predicted taxonomic affiliations with unresolved ranks retained explicitly. Sequence comparisons found 38,093 of 61,608 representatives (61.83%) unmatched in CVD, CMKMC, MGV and IMG/VR v5 at ≥95% ANI over ≥85% of the shorter sequence.</p>
+                        <p class="text-gray-700">Taxonomy combines VITAP and geNomad assignments, with unresolved ranks labeled unassigned. At ≥95% ANI over ≥85% of the shorter sequence, 38,093 of 61,608 representatives (61.83%) have no match in CVD, CMKMC, MGV, or IMG/VR v5.</p>
                     </div>
                     <div class="feature-card">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /> </svg>
                         <h3 class="text-xl font-semibold text-primary-dark mb-2">Predicted Functional Annotations</h3>
-                        <p class="text-gray-700">Provides sequence-based predictions of metabolic and other gene functions for reuse and experimental follow-up.</p>
+                        <p class="text-gray-700">DRAM-v and VIBRANT predict auxiliary metabolic genes in 13,645 vOTUs, and a database screen flags resistance, virulence, and plasmid-marker genes. Each record links to its vOTU and source contig.</p>
                     </div>
                     <div class="feature-card">
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /> </svg>
                         <h3 class="text-xl font-semibold text-primary-dark mb-2">Predicted Microbial Hosts</h3>
-                        <p class="text-gray-700">Provides computational microbial-host assignments for catalog-linked sequences. Bird source metadata describes the sampled material; microbial-host predictions identify candidate hosts for follow-up.</p>
+                        <p class="text-gray-700">iPHoP assigns candidate prokaryotic hosts to catalog sequences at a confidence score of 90 or higher. Bird source fields record the sampled animal, and a separate host table lists the predicted prokaryotic hosts.</p>
                     </div>
                  </div>
             </div>
@@ -370,20 +370,20 @@
        
         <section id="download" class="py-16 bg-white">
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-                <p class="text-gray-700">Archived release: October 29, 2026 (version 4), Zenodo record 23768304.
-                    Cite <a href="https://doi.org/10.5281/zenodo.23768304">this fixed release</a> for reproducibility;
-                    the <a href="https://doi.org/10.5281/zenodo.15660655">concept DOI</a> provides access to the release history.
-                    The <a href="browse.html" class="text-link underline">catalog metadata preview</a> supports filtering by identifier, quality, length and source coverage, with TSV export, and shows the same 61,608 vOTUs as this release. The Zenodo record also provides the source inventory, member-level source tables, the release manifest and Supplementary Tables S1–S15. Sequence searches and analyses can be run locally using these downloads.</p>
-                <p class="text-gray-700 mt-3">After decompressing a TSV download, open it in a spreadsheet application or a tabular analysis tool.
-                    Open the SQLite download with a SQLite client; the schema file lists its tables and columns.
-                    In the metadata preview, <code>vOTU_id</code> identifies the operational group and <code>contig_repid</code>
-                    identifies its representative sequence. Source assignment and bird source groups summarize retained members;
-                    class and family retain unresolved assignments as <code>unassigned</code>.</p>
-                <p class="text-gray-700 mt-3">To search query sequences against the catalog, build a nucleotide BLAST database from the sequence download:
+                <p class="text-gray-700">Release 4 (October 29, 2026; Zenodo record 23768304).
+                    Cite <a href="https://doi.org/10.5281/zenodo.23768304">this version DOI</a> for reproducibility;
+                    the <a href="https://doi.org/10.5281/zenodo.15660655">concept DOI</a> resolves to the full release history.
+                    The <a href="browse.html" class="text-link underline">catalog metadata preview</a> lists the 61,608 vOTUs and supports filtering by identifier, quality, length, and source coverage, with TSV export. The record also includes the source inventory, member-level source tables, the release manifest, and Supplementary Tables S1-S15.</p>
+                <p class="text-gray-700 mt-3">Decompressed TSV files open in spreadsheet applications or tabular analysis tools, and the SQLite file opens with a SQLite client;
+                    <code>db_description.txt</code> defines its tables and fields.
+                    <code>vOTU_id</code> identifies each vOTU and <code>contig_repid</code> identifies its representative sequence.
+                    Source assignment and bird source groups summarize the retained members of each vOTU;
+                    class and family list unresolved assignments as <code>unassigned</code>.</p>
+                <p class="text-gray-700 mt-3">Build a nucleotide BLAST database from the sequence download to search query sequences against the catalog:
                     <code>gunzip -k vOTUs.fasta.gz; makeblastdb -in vOTUs.fasta -dbtype nucl -out AvianViromeDB;
                     blastn -query query.fasta -db AvianViromeDB -outfmt 6 -max_target_seqs 10</code>.</p>
-                <p class="text-gray-700 mt-3">The archived release contains sequences across quality tiers. Use the CheckV quality and completeness fields
-                    to select sequences for downstream analysis. Gene and host annotations describe computational predictions linked to catalog members.</p>
+                <p class="text-gray-700 mt-3">The release covers all CheckV quality tiers. Filter by CheckV quality and completeness
+                    to select sequences for downstream analysis. Gene and host tables provide computational predictions linked to catalog members.</p>
             </div>
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
                 <h2 class="text-3xl font-bold text-center text-gray-900 mb-8">Download Database</h2>
@@ -394,7 +394,7 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Sequences</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Non-redundant viral operational taxonomic unit sequences.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Representative nucleotide sequences for the 61,608 vOTUs.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(FASTA, ~515MB)</span>
@@ -408,7 +408,7 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">Protein Sequences</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Predicted protein sequences from vOTUs in FASTA format.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">2,290,347 proteins predicted from the representative sequences.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(FASTA, ~343MB)</span>
@@ -422,7 +422,7 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Annotations</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Comprehensive metadata including quality metrics (CheckV), taxonomy (VITAP/geNomad), combined predicted lifestyle, source host, completeness, etc.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">One row per vOTU: CheckV quality, VITAP/geNomad taxonomy, predicted lifestyle, vConTACT3 cluster, and bird source counts.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(TSV, ~3.8MB)</span>
@@ -436,7 +436,7 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">Functional Gene Annotations</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Separate VIBRANT and DRAM-v annotations, plus database screening records linked through cluster membership. Records can overlap across annotation sources.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">AMG predictions from DRAM-v and VIBRANT alongside resistance, virulence, and plasmid-marker screening results, organized as one table per source and linked to vOTUs through cluster membership. Individual proteins can appear in multiple tables.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(TSV, ~1.0MB)</span>
@@ -450,7 +450,7 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">Host Predictions</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Predicted microbial-host associations from iPHoP, linked to catalog clusters.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">iPHoP prokaryotic host predictions for catalog members, linked to vOTUs.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(TSV, ~6.3MB)</span>
@@ -464,12 +464,69 @@
                     </section>
 
                     <section class="download-card mt-8">
+                        <h2 class="text-2xl font-semibold text-secondary-dark mb-6 border-b border-gray-200 pb-4">Source Metadata</h2>
+                        <div class="space-y-6">
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Source Inventory</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">All 2,658 public source records with run, BioSample, and BioProject accessions, reported host labels, bird category, and curation evidence.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~93KB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/source_inventory.tsv.gz?download=1" download class="download-button">
+                                        source_inventory.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Source Members</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Member contigs of each vOTU joined to their source records.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~3.8MB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/vOTU_source_members.tsv.gz?download=1" download class="download-button">
+                                        vOTU_source_members.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">vOTU Bird Sources</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Bird source category counts for each vOTU.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~185KB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/vOTU_bird_sources.tsv.gz?download=1" download class="download-button">
+                                        vOTU_bird_sources.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Legacy Bird Source Annotations</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Bird source and prevalence fields from earlier releases, retained for provenance.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(TSV, ~212KB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/legacy_bird_source_annotations.tsv.gz?download=1" download class="download-button">
+                                        legacy_bird_source_annotations.tsv.gz
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="download-card mt-8">
                         <h2 class="text-2xl font-semibold text-secondary-dark mb-6 border-b border-gray-200 pb-4">Additional Resources</h2>
                         <div class="space-y-6">
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">SQLite Database</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Complete database with all annotations in SQLite format for easy querying and analysis.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">All release tables in one SQLite database for querying.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(SQLite, ~203MB)</span>
@@ -483,13 +540,39 @@
                             <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-primary-dark mb-1">Database description</h3>
-                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Description of the database schema.</p>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Field definitions and table relationships for this release.</p>
                                 </div>
                                 <div class="flex-shrink-0 mt-2 md:mt-0">
                                     <span class="text-xs text-gray-500 ml-2">(TXT, ~1.8KB)</span>
                                     <a href="https://zenodo.org/records/23768304/files/db_description.txt?download=1" download class="download-button">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /> </svg>
                                         db_description.txt
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Release Manifest</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">File checksums, row counts, and input provenance for this release.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(JSON, ~6.7KB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/manifest.json?download=1" download class="download-button">
+                                        manifest.json
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="download-item flex flex-col md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-primary-dark mb-1">Supplementary Tables</h3>
+                                    <p class="text-sm text-gray-600 mb-2 md:mb-0">Supplementary Tables S1-S15 of the accompanying manuscript.</p>
+                                </div>
+                                <div class="flex-shrink-0 mt-2 md:mt-0">
+                                    <span class="text-xs text-gray-500 ml-2">(ZIP, ~20MB)</span>
+                                    <a href="https://zenodo.org/records/23768304/files/supplementary%20tables.zip?download=1" download class="download-button">
+                                        supplementary tables.zip
                                     </a>
                                 </div>
                             </div>
@@ -513,11 +596,11 @@
         <section id="maintenance" class="py-12 bg-white border-t border-gray-200">
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
                 <h2 class="text-2xl font-semibold text-secondary-dark mb-4">Maintenance and community feedback</h2>
-                <p class="text-gray-700">denglab maintains AvianViromeDB. Corrections and additions will be released as needed,
-                    with each release archived separately on Zenodo and previous versions remaining citable.
-                    Release notes will record the date, data scope, and changes to identifiers or annotations.</p>
+                <p class="text-gray-700">denglab maintains AvianViromeDB and publishes updates as needed.
+                    Each release is archived on Zenodo with a version DOI, and earlier versions remain citable.
+                    Each Zenodo record documents the release date, data scope, and identifier or annotation updates.</p>
                 <p class="text-gray-700 mt-3">Use the <a href="feedback.html" class="text-link underline">feedback page</a>
-                    to report issues or suggest public studies for review and possible inclusion in a future release.</p>
+                    to report issues or suggest public studies for future releases.</p>
             </div>
         </section>
     </main>
